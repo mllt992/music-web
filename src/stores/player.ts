@@ -9,6 +9,8 @@ export type TrackRef = {
   album?: string
   platform?: TuneHubPlatform | string
   playCount?: number
+  realUrl?: string
+  realUrlTimestamp?: number
 }
 
 export type Playlist = {

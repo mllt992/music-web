@@ -25,22 +25,33 @@ onMounted(() => {
   player.loadHistory()
   player.loadFavorites()
   player.loadPlayCounts()
-  
+
   // 尝试从 sessionStorage 恢复播放进度和总时长
   const savedTime = sessionStorage.getItem('player_now')
   const savedDuration = sessionStorage.getItem('player_duration')
-  
+
   if (savedTime) {
     const time = parseFloat(savedTime)
     if (!isNaN(time) && isFinite(time) && time > 0) {
       currentTime.value = time
     }
   }
-  
+
   if (savedDuration) {
     const savedDurationValue = parseFloat(savedDuration)
     if (!isNaN(savedDurationValue) && isFinite(savedDurationValue) && savedDurationValue > 0) {
       duration.value = savedDurationValue
+    }
+  }
+
+  // 如果已经有当前播放的歌曲，确保加载状态正确
+  const el = audioRef.value
+  if (player.current && el) {
+    // 设置正确的src
+    el.src = audioSrc.value
+    // 如果使用的是缓存的实际URL，直接设置loading为false
+    if (player.current.realUrl) {
+      loading.value = false
     }
   }
 })
@@ -82,6 +93,24 @@ const title = computed(() => {
 const baseUrl = computed(() => app.data.settings.api.baseUrl || 'https://music-dl.sayqz.com')
 const audioSrc = computed(() => {
   if (!player.current) return ''
+
+  // 优先使用保存的实际URL，避免重复302跳转
+  // 检查URL是否有效（有效期为1小时）
+  const isValidUrl = player.current.realUrl &&
+                    player.current.realUrlTimestamp &&
+                    Date.now() - player.current.realUrlTimestamp < 36000000
+
+  if (isValidUrl) {
+    return player.current.realUrl
+  }
+
+  // URL无效或过期，清除并重新生成
+  if (player.current.realUrl) {
+    player.current.realUrl = undefined
+    player.current.realUrlTimestamp = undefined
+    player.saveSettings()
+  }
+
   return buildApiUrl(baseUrl.value, {
     source: (player.current.platform || 'netease') as string,
     id: player.current.id,
@@ -105,6 +134,16 @@ watch(
     const el = audioRef.value
     if (!el) return
     if (!audioSrc.value) return
+
+    // 如果当前已经是相同的音频源，不需要重新加载
+    if (el.currentSrc === audioSrc.value) {
+      // 如果正在播放，确保loading状态正确
+      if (player.playing && !el.paused) {
+        loading.value = false
+      }
+      return
+    }
+
     try {
       // 重置状态，不保留旧时间
       duration.value = 0
@@ -112,37 +151,83 @@ watch(
       seeking.value = false
       // 设置加载状态为true
       loading.value = true
-      
+
       // 重点：不要设置 crossorigin，否则目标音频域没配 CORS 时会导致"无声/加载失败"
       el.src = audioSrc.value
-      
+
       // 设置音频元素的当前时间为0，确保新歌曲从0开始
       el.currentTime = 0
-      
+
+      // 添加事件监听器，在音频开始加载后获取实际URL
+      const handleLoadStart = () => {
+        // 保存实际URL和时间戳
+        if (el.currentSrc && el.currentSrc !== audioSrc.value && player.current) {
+          player.current.realUrl = el.currentSrc
+          player.current.realUrlTimestamp = Date.now()
+          player.saveSettings()
+        }
+      }
+
       // 添加音频加载事件监听，确保获取到正确的时长
-      el.addEventListener('loadeddata', () => {
+      const handleLoadedData = () => {
         duration.value = el.duration || 0
         // 加载完成，设置loading为false
         loading.value = false
-      }, { once: true })
-      
+        // 再次检查实际URL
+        handleLoadStart()
+      }
+
       // 添加音频加载错误事件监听
-      el.addEventListener('error', () => {
+      const handleError = () => {
+        loading.value = false
+        // 加载失败时清除可能的错误URL
+        if (player.current) {
+          player.current.realUrl = undefined
+          player.current.realUrlTimestamp = undefined
+          player.saveSettings()
+        }
+      }
+
+      // 添加canplay事件监听，确保加载状态正确设置
+      const handleCanPlay = () => {
+        loading.value = false
+        // 再次检查实际URL
+        handleLoadStart()
+      }
+
+      // 添加loadstart事件监听，获取实际URL
+      el.addEventListener('loadstart', handleLoadStart, { once: true })
+      el.addEventListener('loadeddata', handleLoadedData, { once: true })
+      el.addEventListener('error', handleError, { once: true })
+      el.addEventListener('canplay', handleCanPlay, { once: true })
+
+      // 添加canplaythrough事件，确保在音频可以流畅播放时也设置loading为false
+      el.addEventListener('canplaythrough', () => {
         loading.value = false
       }, { once: true })
-      
-      if (player.playing) await el.play()
-      else {
-        // 如果不是播放状态，也要确保加载完成后设置loading为false
-        el.addEventListener('canplay', () => {
+
+      if (player.playing) {
+        try {
+          await el.play()
+          // 播放成功后立即设置loading为false
           loading.value = false
-        }, { once: true })
+        } catch (playError) {
+          // 播放失败但音频可能已加载，仍需设置loading为false
+          loading.value = false
+          message.error((playError as Error).message || '播放失败（可能是浏览器策略限制）')
+        }
       }
     } catch (e) {
       message.error((e as Error).message || '播放失败（可能是跨域或资源不可用）')
       player.pause()
       // 加载失败，设置loading为false
       loading.value = false
+      // 加载失败时清除可能的错误URL
+      if (player.current) {
+        player.current.realUrl = undefined
+        player.current.realUrlTimestamp = undefined
+        player.saveSettings()
+      }
     }
   },
 )
@@ -180,7 +265,7 @@ function onEnded() {
   if (player.current && player.queue.length === 0) {
     player.queue = [player.current]
   }
-  
+
   // 直接调用player.next()，它已经处理了所有播放模式
   player.next()
 }
@@ -188,7 +273,7 @@ function onEnded() {
 function onTimeUpdate() {
   const el = audioRef.value
   if (!el || seeking.value) return
-  
+
   // 确保获取到有效的当前时间
   const current = el.currentTime
   if (current && !isNaN(current) && isFinite(current)) {
@@ -200,7 +285,7 @@ function onTimeUpdate() {
 function onLoadedMeta() {
   const el = audioRef.value
   if (!el) return
-  
+
   // 确保获取到有效的时长
   const audioDuration = el.duration
   if (audioDuration && !isNaN(audioDuration) && isFinite(audioDuration)) {
@@ -220,7 +305,7 @@ function onLoadedMeta() {
 function formatTime(sec: number) {
   // 添加更严格的时间验证
   if (!sec || isNaN(sec) || !isFinite(sec) || sec < 0) return '0:00'
-  
+
   const m = Math.floor(sec / 60)
   const s = Math.floor(sec % 60)
   return `${m}:${s.toString().padStart(2, '0')}`
@@ -246,9 +331,9 @@ function commitSeek(v: number) {
 
         <div class="center">
           <NSpace align="center" :size="8">
-            <NButton 
-              circle 
-              size="small" 
+            <NButton
+              circle
+              size="small"
               :disabled="!player.current"
               @click="player.toggleMode()"
               :title="player.mode === 'order' ? '顺序播放' : player.mode === 'loop' ? '单曲循环' : player.mode === 'loop_list' ? '列表循环' : '随机播放'"
@@ -266,9 +351,9 @@ function commitSeek(v: number) {
                 <path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/>
               </svg>
             </NButton>
-            <NButton 
-              circle 
-              :disabled="!player.current || loading" 
+            <NButton
+              circle
+              :disabled="!player.current || loading"
               :loading="loading"
               @click="player.playing ? player.pause() : player.current && player.play(player.current)"
             >
@@ -289,9 +374,9 @@ function commitSeek(v: number) {
                 <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
               </svg>
             </NButton>
-            <NButton 
+            <NButton
               circle
-              size="small" 
+              size="small"
               :disabled="!player.current"
               :type="player.current && player.isFavorite(player.current) ? 'error' : 'default'"
               @click.stop="player.current && player.toggleFavorite(player.current)"
@@ -306,7 +391,7 @@ function commitSeek(v: number) {
                 <path d="M18 6h-2v2h-2V6H9v2H7V6H5v12h2v-2h2v2h8v-2h2v2h2V6h-2zM7 16H5v-2h2v2zm4 0H9v-2h2v2zm4 0h-2v-2h2v2zm4 0h-2v-2h2v2z"/>
               </svg>
             </NButton>
-            
+
             <!-- 当前播放队列 -->
             <NPopover trigger="click" placement="top" style="padding: 0; min-width: 300px; max-width: 500px;">
               <template #trigger>
@@ -351,7 +436,7 @@ function commitSeek(v: number) {
                 </div>
               </div>
             </NPopover>
-            
+
             <!-- 添加到歌单 -->
             <NPopover trigger="click" placement="top" style="padding: 0; min-width: 200px">
               <template #trigger>
@@ -385,9 +470,9 @@ function commitSeek(v: number) {
                 </div>
               </div>
             </NPopover>
-            <NButton 
+            <NButton
               circle
-              size="small" 
+              size="small"
               :disabled="!audioSrc"
               tag="a"
               :href="audioSrc"
@@ -511,8 +596,8 @@ function commitSeek(v: number) {
   appearance: none;
   height: 5px;
   border-radius: 999px;
-  background: linear-gradient(90deg, 
-    rgba(99, 102, 241, 0.25) 0%, 
+  background: linear-gradient(90deg,
+    rgba(99, 102, 241, 0.25) 0%,
     rgba(139, 92, 246, 0.15) 100%);
   outline: none;
   cursor: pointer;
