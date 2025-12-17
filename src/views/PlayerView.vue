@@ -34,13 +34,8 @@ const lrcText = ref('')
 const lrcLines = ref<LrcLine[]>([])
 const now = ref(0)
 const lyricsContainer = ref<HTMLElement | null>(null)
-const visualCanvas = ref<HTMLCanvasElement | null>(null)
-
-// 音频可视化相关
-let audioContext: AudioContext | null = null
-let analyser: AnalyserNode | null = null
-let dataArray: Uint8Array | null = null
-let animationFrame: number | null = null
+// 封面显示开关
+const showCover = ref(true)
 
 function setNowFromStorage() {
   const raw = sessionStorage.getItem('player_now')
@@ -78,209 +73,94 @@ watch(
   },
 )
 
-// 初始化音频可视化
-async function initVisualization() {
-  if (!visualCanvas.value || !player.current) return
-
-  // 查找音频元素
-  const audioElements = document.getElementsByTagName('audio')
-  if (audioElements.length === 0) return
-
-  const audio = audioElements[0]
-
-  try {
-    // 创建音频上下文
-    audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
-    analyser = audioContext.createAnalyser()
-    analyser.fftSize = 256
-    
-    // 创建媒体元素源并连接到分析器
-    const source = audioContext.createMediaElementSource(audio)
-    source.connect(analyser)
-    analyser.connect(audioContext.destination)
-    
-    // 获取频率数据
-    const bufferLength = analyser.frequencyBinCount
-    dataArray = new Uint8Array(bufferLength)
-    
-    // 开始动画
-    startVisualization()
-  } catch (error) {
-    console.error('音频可视化初始化失败:', error)
-  }
-}
-
-// 开始可视化动画
-function startVisualization() {
-  if (!visualCanvas.value || !analyser || !dataArray) return
-
-  const canvas = visualCanvas.value
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return
-
-  // 设置canvas尺寸
-  const resizeCanvas = () => {
-    canvas.width = canvas.offsetWidth
-    canvas.height = canvas.offsetHeight
-  }
-
-  resizeCanvas()
-  window.addEventListener('resize', resizeCanvas)
-
-  // 动画函数
-  function draw() {
-    animationFrame = requestAnimationFrame(draw)
-    
-    // 获取频率数据
-    analyser.getByteFrequencyData(dataArray)
-    
-    // 清除画布
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-    
-    // 绘制频谱
-    const barWidth = (canvas.width / dataArray.length) * 2.5
-    let x = 0
-    
-    for (let i = 0; i < dataArray.length; i++) {
-      const barHeight = (dataArray[i] / 255) * canvas.height * 0.8
-      
-      // 创建渐变颜色
-      const gradient = ctx.createLinearGradient(0, canvas.height - barHeight, 0, canvas.height)
-      gradient.addColorStop(0, '#6366f1')
-      gradient.addColorStop(0.5, '#8b5cf6')
-      gradient.addColorStop(1, '#ec4899')
-      
-      ctx.fillStyle = gradient
-      ctx.fillRect(x, canvas.height - barHeight, barWidth - 2, barHeight)
-      
-      // 添加光晕效果
-      ctx.shadowBlur = 10
-      ctx.shadowColor = '#6366f1'
-      
-      x += barWidth + 1
-    }
-  }
-  
-  draw()
-}
-
-// 停止可视化
-function stopVisualization() {
-  if (animationFrame) {
-    cancelAnimationFrame(animationFrame)
-    animationFrame = null
-  }
-  
-  if (audioContext) {
-    audioContext.close()
-    audioContext = null
-    analyser = null
-    dataArray = null
-  }
-}
-
 onMounted(async () => {
   setNowFromStorage()
   await loadLyrics()
   window.addEventListener('storage', setNowFromStorage)
   const interval = setInterval(setNowFromStorage, 100)
   
-  // 初始化可视化
-  await nextTick()
-  if (player.current) {
-    initVisualization()
-  }
-  
   return () => {
     clearInterval(interval)
-    stopVisualization()
   }
 })
-
-// 监听歌曲变化，重新初始化可视化
-watch(
-  () => player.current?.id,
-  async (newId) => {
-    if (newId) {
-      stopVisualization()
-      await nextTick()
-      initVisualization()
-    }
-  }
-)
 </script>
 
 <template>
-  <div class="wrap" :class="{ 'has-song': !!player.current }">
+  <div class="player-view" :class="{ 'has-song': !!player.current }">
     <!-- 背景层 -->
     <div class="bg-layer">
       <div 
         class="bg-image" 
         :style="{ backgroundImage: picUrl ? `url(${picUrl})` : '' }"
-        :class="{ 'active': !!player.current }"
+        :class="{ 'active': !!player.current, 'hidden': !showCover }"
       ></div>
       <div class="bg-overlay"></div>
     </div>
     
     <!-- 内容层 -->
     <div class="content">
-      <div class="top">
-        <NSpace align="center">
-          <NButton quaternary @click="router.back()">返回</NButton>
-          <div class="title">
-            <div class="t">{{ player.current?.name || '未播放' }}</div>
-            <div class="s">{{ player.current?.artist || '' }}</div>
-          </div>
-        </NSpace>
-        <NSpace>
-          <NButton size="small" :disabled="!player.current" @click="player.playing ? player.pause() : (player.playing = true)">
-            {{ player.playing ? '暂停' : '播放' }}
-          </NButton>
-        </NSpace>
-      </div>
-
       <div v-if="!player.current" class="empty">
         <NEmpty description="先从搜索/榜单里点一首歌开始播放" />
       </div>
 
-      <div v-else class="grid">
-      <div class="art surface-inset">
-        <!-- 音乐可视化 -->
-        <div class="visualization">
-          <canvas ref="visualCanvas" class="visual-canvas"></canvas>
+      <!-- 歌词区域 -->
+      <div v-else ref="lyricsContainer" class="lyrics">
+        <div v-if="lrcLines.length === 0" class="no-lyric">
+          <NEmpty description="暂无歌词或歌词加载失败" />
         </div>
-        <div class="cover" :style="{ backgroundImage: picUrl ? `url(${picUrl})` : '' }" />
+        <div v-else class="lines">
+          <div
+            v-for="(line, idx) in lrcLines"
+            :key="idx"
+            class="line"
+            :class="{ active: idx === activeIdx }"
+          >
+            {{ line.text || '…' }}
+          </div>
+        </div>
       </div>
-
-        <div class="lyric surface-inset">
-          <div v-if="lrcLines.length === 0" class="no-lyric">
-            <NEmpty description="暂无歌词或歌词加载失败" />
-          </div>
-          <div v-else ref="lyricsContainer" class="lines">
-            <div
-              v-for="(line, idx) in lrcLines"
-              :key="idx"
-              class="line"
-              :class="{ active: idx === activeIdx }"
-            >
-              {{ line.text || '…' }}
-            </div>
-          </div>
-        </div>
     </div>
+    
+    <!-- 控制按钮 -->
+    <div class="controls" v-if="player.current">
+      <NButton quaternary circle size="large" @click="router.back()" class="back-btn">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+        </svg>
+      </NButton>
+      
+      <NButton quaternary circle size="large" @click="showCover = !showCover" class="cover-toggle">
+        <svg v-if="showCover" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
+        </svg>
+        <svg v-else width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
+        </svg>
+      </NButton>
     </div>
   </div>
 </template>
 
 <style scoped>
-.wrap {
+.player-view {
+  width: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  position: relative;
-  min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   overflow: hidden;
+  background: rgba(255, 255, 255, 0.95);
+  animation: fadeIn 0.5s ease-out;
+  position: relative;
+  border-radius: 0;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 /* 背景层 */
@@ -295,7 +175,7 @@ watch(
   transition: opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.wrap.has-song .bg-layer {
+.player-view.has-song .bg-layer {
   opacity: 1;
 }
 
@@ -308,15 +188,19 @@ watch(
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  filter: blur(40px) brightness(0.5) saturate(1.2);
-  transform: scale(1.1);
+  filter: blur(50px) brightness(0.8) saturate(0.9);
+  transform: scale(1.2);
   opacity: 0;
-  transition: opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1), transform 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity 1.5s cubic-bezier(0.4, 0, 0.2, 1), transform 1.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .bg-image.active {
-  opacity: 1;
-  transform: scale(1.15);
+  opacity: 0.7;
+}
+
+.bg-image.hidden {
+  opacity: 0;
+  transform: scale(1);
 }
 
 .bg-overlay {
@@ -325,7 +209,7 @@ watch(
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.3) 0%, rgba(0, 0, 0, 0.7) 100%);
+  background: rgba(255, 255, 255, 0.5);
   backdrop-filter: blur(10px);
 }
 
@@ -336,315 +220,98 @@ watch(
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding: 24px;
-  animation: fadeIn 0.6s ease-out;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(15px);
-  border-radius: 16px;
-  padding: 16px 24px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease;
-}
-
-.top:hover {
-  background: rgba(255, 255, 255, 0.15);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
-}
-
-.title .t {
-  font-weight: 700;
-  color: white;
-  font-size: 18px;
-  transition: all 0.3s ease;
-}
-
-.title .s {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.8);
-  transition: all 0.3s ease;
-}
-
-.grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 24px;
-  align-items: center;
-  flex: 1;
-}
-
-@media (min-width: 980px) {
-  .grid {
-    grid-template-columns: 0.8fr 1.2fr;
-    align-items: start;
-  }
-}
-
-/* 专辑封面 */
-.art {
-  padding: 20px;
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(20px);
-  border-radius: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.15);
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  animation: slideUp 0.8s ease-out;
-}
-
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(40px) scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-.art:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 16px 64px rgba(0, 0, 0, 0.2);
-  background: rgba(255, 255, 255, 0.15);
-}
-
-.visualization {
-  width: 100%;
-  height: 80px;
-  margin-bottom: 20px;
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 12px;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  overflow: hidden;
-  display: flex;
-  align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-  animation: fadeIn 0.8s ease-out 0.4s both;
-}
-
-.visual-canvas {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
-.cover {
-  width: 100%;
-  aspect-ratio: 1/1;
-  border-radius: 18px;
-  background: radial-gradient(600px 280px at 30% 20%, rgba(99, 102, 241, 0.22), transparent 60%),
-    radial-gradient(520px 300px at 80% 25%, rgba(16, 185, 129, 0.18), transparent 60%),
-    rgba(255, 255, 255, 0.5);
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  border: 3px solid rgba(255, 255, 255, 0.3);
-  box-shadow: 
-    0 0 0 1px rgba(255, 255, 255, 0.1),
-    0 20px 60px rgba(0, 0, 0, 0.3),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.1);
-  transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
+  align-items: center;
+  padding: 20px;
   overflow: hidden;
-  animation: rotateSlow 20s linear infinite;
-}
-
-/* 发光光晕效果 */
-.cover::after {
-  content: '';
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  right: -50%;
-  bottom: -50%;
-  background: radial-gradient(circle, rgba(99, 102, 241, 0.3) 0%, rgba(139, 92, 246, 0.2) 50%, transparent 70%);
-  animation: breathe 3s ease-in-out infinite;
-  opacity: 0.6;
-  z-index: -1;
-}
-
-/* 唱片旋转动画 */
-@keyframes rotateSlow {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* 呼吸灯效果 */
-@keyframes breathe {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 0.6;
-  }
-  50% {
-    transform: scale(1.1);
-    opacity: 0.8;
-  }
-}
-
-/* 高光效果 */
-.cover::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 100%);
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  border-radius: inherit;
-}
-
-/* 播放状态下的增强效果 */
-.wrap.has-song .cover {
-  box-shadow: 
-    0 0 60px rgba(99, 102, 241, 0.4),
-    0 0 0 1px rgba(255, 255, 255, 0.2),
-    0 20px 60px rgba(0, 0, 0, 0.3),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.1);
-  animation: rotateSlow 20s linear infinite, pulse 2s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    transform: scale(1) rotate(0deg);
-  }
-  50% {
-    transform: scale(1.01) rotate(0deg);
-  }
-}
-
-.art:hover .cover {
-  transform: scale(1.02) rotate(0deg);
-  box-shadow: 
-    0 0 80px rgba(99, 102, 241, 0.6),
-    0 0 0 1px rgba(255, 255, 255, 0.3),
-    0 24px 72px rgba(0, 0, 0, 0.4),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.7);
-  animation-play-state: paused;
-}
-
-.art:hover .cover::before {
-  opacity: 1;
-}
-
-.art:hover .cover::after {
-  animation-play-state: paused;
 }
 
 /* 歌词区域 */
-.lyric {
-  padding: 24px;
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(20px);
-  border-radius: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.15);
-  min-height: 480px;
-  animation: slideUp 0.8s ease-out 0.2s both;
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.lyric:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 16px 64px rgba(0, 0, 0, 0.2);
-  background: rgba(255, 255, 255, 0.15);
+.lyrics {
+  width: 100%;
+  max-width: 800px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  overflow: hidden;
 }
 
 .lines {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  line-height: 2.0;
-  max-height: 580px;
+  gap: 24px;
+  line-height: 2.2;
+  max-height: 100%;
   overflow: auto;
-  padding: 24px;
+  padding: 20px;
   scroll-behavior: smooth;
-  transition: all 0.3s ease;
+  overscroll-behavior-y: contain;
+  scroll-snap-type: y mandatory;
+  width: 100%;
+  text-align: center;
 }
 
 /* 歌词行样式 */
 .line {
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(0, 0, 0, 0.5);
   transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-  font-size: 16px;
+  font-size: 20px;
   text-align: center;
   position: relative;
   transform: scale(0.95) translateY(0);
   opacity: 0.7;
   filter: blur(0.5px);
+  scroll-snap-align: center;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-/* 歌词下划线效果 */
 .line::before {
   content: '';
   position: absolute;
-  bottom: -4px;
+  bottom: -6px;
   left: 50%;
   width: 0;
   height: 2px;
-  background: linear-gradient(90deg, #6366f1, #8b5cf6);
+  background: rgba(0, 0, 0, 0.3);
   transform: translateX(-50%);
   transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
   opacity: 0;
-  box-shadow: 0 0 10px rgba(99, 102, 241, 0.5);
+  border-radius: 2px;
 }
 
-/* 激活歌词样式 */
 .line.active {
-  color: white;
-  font-weight: 700;
-  font-size: 20px;
-  transform: scale(1.08) translateY(0);
+  color: black;
+  font-weight: 600;
+  font-size: 28px;
+  transform: scale(1.05) translateY(0);
   opacity: 1;
   text-shadow: 
-    0 0 20px rgba(99, 102, 241, 0.6),
-    0 2px 12px rgba(0, 0, 0, 0.3),
-    0 0 4px rgba(255, 255, 255, 0.8);
+    0 0 15px rgba(255, 255, 255, 0.8),
+    0 2px 10px rgba(0, 0, 0, 0.1);
   filter: blur(0px);
-  animation: lyricHighlight 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: lyricHighlight 0.8s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* 歌词高亮动画 */
 @keyframes lyricHighlight {
   0% {
-    transform: scale(0.95) translateY(10px);
+    transform: scale(0.95) translateY(20px);
     opacity: 0.7;
     filter: blur(1px);
   }
   50% {
-    transform: scale(1.1) translateY(-2px);
+    transform: scale(1.1) translateY(-4px);
     opacity: 1;
     filter: blur(0px);
   }
   100% {
-    transform: scale(1.08) translateY(0);
+    transform: scale(1.05) translateY(0);
     opacity: 1;
     filter: blur(0px);
   }
@@ -653,8 +320,8 @@ watch(
 /* 激活歌词下划线 */
 .line.active::before {
   width: 80px;
-  opacity: 1;
-  animation: underlineGrow 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  opacity: 0.6;
+  animation: underlineGrow 0.8s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* 下划线增长动画 */
@@ -665,7 +332,7 @@ watch(
   }
   100% {
     width: 80px;
-    opacity: 1;
+    opacity: 0.6;
   }
 }
 
@@ -693,48 +360,60 @@ watch(
   }
 }
 
-/* 滚动时的平滑过渡 */
-.lines {
-  scroll-behavior: smooth;
-  overscroll-behavior-y: contain;
-  scroll-snap-type: y mandatory;
-}
-
-.line {
-  scroll-snap-align: center;
-}
-
 /* 滚动条样式 */
 .lines::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
 }
 
 .lines::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
 }
 
 .lines::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
   transition: all 0.3s ease;
 }
 
 .lines::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.5);
+  background: rgba(0, 0, 0, 0.3);
 }
 
+/* 控制按钮 */
+.controls {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  right: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 10;
+}
+
+.back-btn, .cover-toggle {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+  color: #333;
+}
+
+.back-btn:hover, .cover-toggle:hover {
+  background: white;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+/* 空状态 */
 .empty {
   display: flex;
   align-items: center;
   justify-content: center;
   flex: 1;
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(20px);
-  border-radius: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.15);
-  animation: fadeIn 0.6s ease-out;
+  color: rgba(0, 0, 0, 0.6);
 }
 
 .no-lyric {
@@ -742,36 +421,49 @@ watch(
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(0, 0, 0, 0.5);
+  font-size: 18px;
 }
 
 /* 响应式调整 */
 @media (max-width: 768px) {
-  .content {
-    padding: 16px;
+  .lines {
     gap: 16px;
+    line-height: 1.8;
+    padding: 10px;
   }
   
-  .top {
-    padding: 12px 16px;
-  }
-  
-  .title .t {
+  .line {
     font-size: 16px;
+    min-height: 40px;
   }
   
-  .art,
-  .lyric {
-    padding: 16px;
+  .line.active {
+    font-size: 22px;
   }
   
-  .cover {
-    border-radius: 12px;
+  .line.active::before {
+    width: 60px;
+  }
+  
+  .controls {
+    top: 10px;
+    left: 10px;
+    right: 10px;
+  }
+  
+  .back-btn, .cover-toggle {
+    size: medium;
+  }
+}
+
+@media (max-width: 480px) {
+  .content {
+    padding: 10px;
   }
   
   .lines {
-    padding: 16px;
-    gap: 16px;
+    gap: 12px;
   }
   
   .line {
@@ -783,5 +475,3 @@ watch(
   }
 }
 </style>
-
-

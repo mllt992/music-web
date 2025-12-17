@@ -6,13 +6,75 @@ import {
   NLayoutHeader,
   NLayoutContent,
   NMessageProvider,
+  NTooltip,
 } from 'naive-ui'
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import PlayerBar from '../components/PlayerBar.vue'
+import { createTuneHubClient, getHealth, getStatus } from '../api/tunehub'
+import { useAppStore } from '../stores/app'
 
 const route = useRoute()
 const collapsed = ref(false)
+const appStore = useAppStore()
+
+const status = ref<{
+  running: boolean;
+  loading: boolean;
+  data?: {
+    service: string;
+    version: string;
+    status: string;
+    platforms: {
+      total: number;
+      enabled: number;
+      loaded: number;
+      platforms: string[];
+    };
+  };
+}>({ running: false, loading: true })
+const health = ref<{
+  healthy: boolean;
+  loading: boolean;
+}>({ healthy: false, loading: true })
+
+async function checkStatus() {
+  status.value.loading = true
+  try {
+    const client = createTuneHubClient(appStore.data.settings.api.baseUrl)
+    const res = await getStatus({ client })
+    status.value.data = res
+    status.value.running = res.status === 'running' && res.platforms.platforms.includes('netease')
+  } catch {
+    status.value.running = false
+    status.value.data = undefined
+  } finally {
+    status.value.loading = false
+  }
+}
+
+async function checkHealth() {
+  health.value.loading = true
+  try {
+    const client = createTuneHubClient(appStore.data.settings.api.baseUrl)
+    const res = await getHealth({ client })
+    health.value.healthy = res.status === 'healthy'
+  } catch {
+    health.value.healthy = false
+  } finally {
+    health.value.loading = false
+  }
+}
+
+async function checkApiStatus() {
+  await Promise.all([checkStatus(), checkHealth()])
+}
+
+onMounted(() => {
+  checkApiStatus()
+  // Refresh every 30 seconds
+  setInterval(checkApiStatus, 30000)
+})
 
 const themeOverrides = {
   common: {
@@ -47,8 +109,12 @@ const selectedKey = computed(() => (route.path === '/' ? '/discover' : route.pat
   <NConfigProvider :theme-overrides="themeOverrides">
     <NMessageProvider>
       <div class="app-container">
-        <!-- 上：Header -->
-        <NLayoutHeader bordered class="header">
+        <!-- 上：Header - 非播放页显示 -->
+        <NLayoutHeader 
+          v-if="route.path !== '/player'" 
+          bordered 
+          class="header"
+        >
           <div class="header-left">
             <div class="page-title">音乐</div>
             <div class="page-subtitle">MUSIC</div>
@@ -59,50 +125,85 @@ const selectedKey = computed(() => (route.path === '/' ? '/discover' : route.pat
         </NLayoutHeader>
 
         <!-- 中：主内容区 -->
-        <NLayout class="middle-container" has-sider>
-          <!-- 左边：Aside -->
-          <NLayoutSider
-            bordered
-            :collapsed="collapsed"
-            collapse-mode="width"
-            :collapsed-width="56"
-            :width="180"
-            class="sider"
+        <div :class="['main-content', { 'player-mode': route.path === '/player' }]">
+          <!-- 非播放页布局 -->
+          <NLayout 
+            v-if="route.path !== '/player'" 
+            class="middle-container" 
+            has-sider
           >
-            <div class="brand" @click="collapsed = !collapsed">
-              <div class="dot" />
-              <div v-if="!collapsed" class="title">Music</div>
-              <div v-if="!collapsed" class="subtitle"></div>
-            </div>
-            <div class="menu">
-            <div
-              v-for="item in menuOptions"
-              :key="item.key"
-              class="menu-item"
-              :class="{
-                'menu-item--selected': selectedKey === item.key,
-                'menu-item--collapsed': collapsed
-              }"
+            <!-- 左边：Aside -->
+            <NLayoutSider
+              bordered
+              :collapsed="collapsed"
+              collapse-mode="width"
+              :collapsed-width="56"
+              :width="180"
+              class="sider"
             >
-              <router-link :to="item.key" style="display: contents;">
-                <div class="menu-item-content">
-                  <div v-if="item.icon" class="menu-item-icon">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" :innerHTML="item.icon" />
+              <div class="brand" @click="collapsed = !collapsed">
+                <NTooltip trigger="hover" placement="right">
+                  <template #trigger>
+                    <div :class="['dot', { 'dot-green': status.running, 'dot-gray': !status.running && !status.loading, 'dot-loading': status.loading }]" />
+                  </template>
+                  <div style="min-width: 200px;">
+                    <div style="font-weight: bold;">状态</div>
+                    <div>{{ status.loading ? '检查中...' : status.running ? '服务运行正常' : '服务异常' }}</div>
+                    <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">/status</div>
+                    <div v-if="status.data" style="margin-top: 8px; font-size: 12px;">
+                      <div style="margin-top: 4px;">服务: {{ status.data.service }}</div>
+                      <div style="margin-top: 2px;">版本: {{ status.data.version }}</div>
+                      <div style="margin-top: 2px;">平台数: {{ status.data.platforms.enabled }}/{{ status.data.platforms.total }}</div>
+                      <div style="margin-top: 2px;">启用平台: {{ status.data.platforms.platforms.join(', ') }}</div>
+                    </div>
                   </div>
-                  <span v-if="!collapsed" class="menu-item-label">{{ item.label }}</span>
-                </div>
-              </router-link>
+                </NTooltip>
+                <NTooltip trigger="hover" placement="right">
+                  <template #trigger>
+                    <div :class="['dot', { 'dot-green': health.healthy, 'dot-gray': !health.healthy && !health.loading, 'dot-loading': health.loading }]" />
+                  </template>
+                  <div>
+                    <div style="font-weight: bold;">健康</div>
+                    <div>{{ health.loading ? '检查中...' : health.healthy ? '服务健康' : '服务不健康' }}</div>
+                    <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">/health</div>
+                  </div>
+                </NTooltip>
+              </div>
+              <div class="menu">
+              <div
+                v-for="item in menuOptions"
+                :key="item.key"
+                class="menu-item"
+                :class="{
+                  'menu-item--selected': selectedKey === item.key,
+                  'menu-item--collapsed': collapsed
+                }"
+              >
+                <router-link :to="item.key" style="display: contents;">
+                  <div class="menu-item-content">
+                    <div v-if="item.icon" class="menu-item-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" :innerHTML="item.icon" />
+                    </div>
+                    <span v-if="!collapsed" class="menu-item-label">{{ item.label }}</span>
+                  </div>
+                </router-link>
+              </div>
             </div>
-          </div>
-          </NLayoutSider>
+            </NLayoutSider>
 
-          <!-- 右边：Content -->
-          <NLayoutContent class="content surface">
-            <div class="container">
-              <router-view />
-            </div>
-          </NLayoutContent>
-        </NLayout>
+            <!-- 右边：Content -->
+            <NLayoutContent class="content surface">
+              <div class="container">
+                <router-view />
+              </div>
+            </NLayoutContent>
+          </NLayout>
+          
+          <!-- 播放页布局 - 全屏显示 -->
+          <div v-else class="player-container">
+            <router-view />
+          </div>
+        </div>
 
         <!-- 下：播放器 -->
         <PlayerBar />
@@ -119,6 +220,36 @@ const selectedKey = computed(() => (route.path === '/' ? '/discover' : route.pat
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
+}
+
+/* 主内容区 */
+.main-content {
+  flex: 1;
+  overflow: hidden;
+}
+
+/* 播放器模式 */
+.player-mode {
+  margin: 0;
+  padding: 0;
+}
+
+/* 播放器容器 */
+.player-container {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+/* 移除播放器模式下的边距和背景 */
+.player-mode .middle-container {
+  margin: 0;
+  background: transparent;
+  backdrop-filter: none;
+  box-shadow: none;
+  border: none;
 }
 
 * {
@@ -155,7 +286,7 @@ const selectedKey = computed(() => (route.path === '/' ? '/discover' : route.pat
   height: 64px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
   padding: 0 14px;
   cursor: pointer;
   user-select: none;
@@ -166,9 +297,24 @@ const selectedKey = computed(() => (route.path === '/' ? '/discover' : route.pat
   width: 10px;
   height: 10px;
   border-radius: 999px;
-  background: linear-gradient(135deg, #6366f1, #10b981);
   box-shadow: 0 0 0 6px rgba(99, 102, 241, 0.10);
   flex-shrink: 0;
+  transition: all 0.3s ease;
+}
+
+.dot-green {
+  background: linear-gradient(135deg, #10b981, #059669);
+  box-shadow: 0 0 0 6px rgba(16, 185, 129, 0.15);
+}
+
+.dot-gray {
+  background: linear-gradient(135deg, #9ca3af, #6b7280);
+  box-shadow: 0 0 0 6px rgba(156, 163, 175, 0.10);
+}
+
+.dot-loading {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  animation: pulse 1.5s ease-in-out infinite;
 }
 
 .title {
@@ -341,6 +487,16 @@ const selectedKey = computed(() => (route.path === '/' ? '/discover' : route.pat
   padding: 16px;
 }
 
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
 
 </style>
 

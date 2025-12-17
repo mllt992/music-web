@@ -5,11 +5,12 @@ import { computed, ref, watch, onMounted } from 'vue'
 import { usePlayerStore } from '../stores/player'
 import { useAppStore } from '../stores/app'
 import { buildApiUrl } from '../api/tunehub'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 
 const player = usePlayerStore()
 const app = useAppStore()
 const router = useRouter()
+const route = useRoute()
 const message = useMessage()
 const audioRef = ref<HTMLAudioElement | null>(null)
 const duration = ref(0)
@@ -20,41 +21,41 @@ const newPlaylistName = ref('')
 const loading = ref(false)
 
 onMounted(() => {
-  player.loadPlaylists()
-  player.loadSettings()
-  player.loadHistory()
-  player.loadFavorites()
-  player.loadPlayCounts()
+    player.loadPlaylists()
+    player.loadSettings()
+    player.loadHistory()
+    player.loadFavorites()
+    player.loadPlayCounts()
 
-  // 尝试从 sessionStorage 恢复播放进度和总时长
-  const savedTime = sessionStorage.getItem('player_now')
-  const savedDuration = sessionStorage.getItem('player_duration')
+    // 尝试从 localStorage 恢复播放进度和总时长
+    const savedTime = localStorage.getItem('player_now')
+    const savedDuration = localStorage.getItem('player_duration')
 
-  if (savedTime) {
-    const time = parseFloat(savedTime)
-    if (!isNaN(time) && isFinite(time) && time > 0) {
-      currentTime.value = time
+    if (savedTime) {
+      const time = parseFloat(savedTime)
+      if (!isNaN(time) && isFinite(time) && time > 0) {
+        currentTime.value = time
+      }
     }
-  }
 
-  if (savedDuration) {
-    const savedDurationValue = parseFloat(savedDuration)
-    if (!isNaN(savedDurationValue) && isFinite(savedDurationValue) && savedDurationValue > 0) {
-      duration.value = savedDurationValue
+    if (savedDuration) {
+      const savedDurationValue = parseFloat(savedDuration)
+      if (!isNaN(savedDurationValue) && isFinite(savedDurationValue) && savedDurationValue > 0) {
+        duration.value = savedDurationValue
+      }
     }
-  }
 
-  // 如果已经有当前播放的歌曲，确保加载状态正确
-  const el = audioRef.value
-  if (player.current && el) {
-    // 设置正确的src，确保是字符串
-    el.src = audioSrc.value || ''
-    // 如果使用的是缓存的实际URL，直接设置loading为false
-    if (player.current.realUrl) {
-      loading.value = false
+    // 如果已经有当前播放的歌曲，确保加载状态正确
+    const el = audioRef.value
+    if (player.current && el) {
+      // 设置正确的src，确保是字符串
+      el.src = audioSrc.value || ''
+      // 如果使用的是缓存的实际URL，直接设置loading为false
+      if (player.current.realUrl) {
+        loading.value = false
+      }
     }
-  }
-})
+  })
 
 const qualityOptions: SelectOption[] = [
   { label: '标准 128k', value: '128k' },
@@ -145,18 +146,13 @@ watch(
     }
 
     try {
-      // 重置状态，不保留旧时间
-      duration.value = 0
-      currentTime.value = 0
-      seeking.value = false
       // 设置加载状态为true
       loading.value = true
+      // 不重置状态，保留旧时间，让onLoadedMeta处理进度恢复
+      seeking.value = false
 
       // 重点：不要设置 crossorigin，否则目标音频域没配 CORS 时会导致"无声/加载失败"
       el.src = audioSrc.value
-
-      // 设置音频元素的当前时间为0，确保新歌曲从0开始
-      el.currentTime = 0
 
       // 添加事件监听器，在音频开始加载后获取实际URL
       const handleLoadStart = () => {
@@ -281,7 +277,7 @@ function onTimeUpdate() {
   const current = el.currentTime
   if (current && !isNaN(current) && isFinite(current)) {
     currentTime.value = current
-    sessionStorage.setItem('player_now', String(currentTime.value))
+    localStorage.setItem('player_now', String(currentTime.value))
   }
 }
 
@@ -293,13 +289,33 @@ function onLoadedMeta() {
   const audioDuration = el.duration
   if (audioDuration && !isNaN(audioDuration) && isFinite(audioDuration)) {
     duration.value = audioDuration
-    sessionStorage.setItem('player_duration', String(audioDuration))
+    localStorage.setItem('player_duration', String(audioDuration))
+    
+    // 恢复之前的播放进度
+    const savedTime = localStorage.getItem('player_now')
+    if (savedTime) {
+      const time = parseFloat(savedTime)
+      if (!isNaN(time) && isFinite(time) && time > 0 && time <= audioDuration) {
+        el.currentTime = time
+        currentTime.value = time
+      }
+    }
   } else {
     // 如果获取不到时长，尝试等待一段时间再获取
     setTimeout(() => {
       if (el.duration && !isNaN(el.duration) && isFinite(el.duration)) {
         duration.value = el.duration
-        sessionStorage.setItem('player_duration', String(el.duration))
+        localStorage.setItem('player_duration', String(el.duration))
+        
+        // 恢复之前的播放进度
+        const savedTime = localStorage.getItem('player_now')
+        if (savedTime) {
+          const time = parseFloat(savedTime)
+          if (!isNaN(time) && isFinite(time) && time > 0 && time <= el.duration) {
+            el.currentTime = time
+            currentTime.value = time
+          }
+        }
       }
     }, 1000)
   }
@@ -322,9 +338,14 @@ function commitSeek(v: number) {
 </script>
 
 <template>
-  <div class="wrap" :class="{ active: !!player.current }">
+  <div class="wrap" :class="{ active: !!player.current, 'player-page': route.path === '/player' }">
     <div class="bar">
-    <div class="left" role="button" tabindex="0" @click="router.push('/player')">
+    <div 
+      class="left" 
+      role="button" 
+      tabindex="0" 
+      @click="route.path === '/player' ? router.back() : router.push('/player')"
+    >
       <NAvatar :src="picUrl || undefined" round :size="34" />
       <div class="meta">
         <div class="t">{{ title }}</div>
@@ -531,14 +552,14 @@ function commitSeek(v: number) {
 .bar {
   width: 100%;
   padding: 16px 20px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(0, 0, 0, 0.1);
   border-top: none;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(240, 244, 255, 0.9) 100%);
+  background: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(40px) saturate(1.2);
   border-radius: 0;
   box-shadow: 
-    0 8px 32px rgba(99, 102, 241, 0.15),
-    0 0 0 1px rgba(255, 255, 255, 0.9) inset,
+    0 8px 32px rgba(0, 0, 0, 0.1),
+    0 0 0 1px rgba(255, 255, 255, 0.8) inset,
     0 2px 10px rgba(0, 0, 0, 0.05);
   display: grid;
   grid-template-columns: 1fr auto;
@@ -549,6 +570,18 @@ function commitSeek(v: number) {
   overflow: hidden;
 }
 
+/* 播放页面时的毛玻璃效果 */
+.wrap.player-page .bar {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(50px) saturate(1.3);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 
+    0 8px 48px rgba(0, 0, 0, 0.15),
+    0 0 0 1px rgba(255, 255, 255, 0.6) inset,
+    0 2px 20px rgba(0, 0, 0, 0.08);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 /* 底部发光效果 */
 .bar::after {
   content: '';
@@ -557,30 +590,45 @@ function commitSeek(v: number) {
   left: 0;
   right: 0;
   height: 2px;
-  background: linear-gradient(90deg, rgba(99, 102, 241, 0) 0%, rgba(99, 102, 241, 0.5) 50%, rgba(99, 102, 241, 0) 100%);
-  opacity: 0;
+  background: rgba(0, 0, 0, 0.1);
+  opacity: 0.4;
   transition: opacity 0.3s ease;
 }
 
 .bar:hover {
   box-shadow: 
-    0 16px 48px rgba(99, 102, 241, 0.25),
-    0 0 0 1px rgba(255, 255, 255, 0.95) inset,
-    0 4px 16px rgba(0, 0, 0, 0.1);
-  border-color: rgba(99, 102, 241, 0.4);
+    0 16px 48px rgba(0, 0, 0, 0.15),
+    0 0 0 1px rgba(255, 255, 255, 0.9) inset,
+    0 4px 16px rgba(0, 0, 0, 0.08);
+  border-color: rgba(0, 0, 0, 0.15);
   transform: translateY(-2px);
+  background: white;
 }
 
-.bar:hover::after {
-  opacity: 1;
+.wrap.player-page .bar:hover {
+  box-shadow: 
+    0 16px 64px rgba(0, 0, 0, 0.2),
+    0 0 0 1px rgba(255, 255, 255, 0.8) inset,
+    0 4px 24px rgba(0, 0, 0, 0.12);
+  border-color: rgba(255, 255, 255, 0.7);
+  background: white;
 }
 
 /* 激活状态下的效果 */
 .wrap.active .bar {
   box-shadow: 
-    0 12px 40px rgba(99, 102, 241, 0.2),
-    0 0 0 1px rgba(255, 255, 255, 0.95) inset,
-    0 0 0 2px rgba(99, 102, 241, 0.2) inset;
+    0 12px 40px rgba(0, 0, 0, 0.15),
+    0 0 0 1px rgba(255, 255, 255, 0.9) inset,
+    0 0 0 2px rgba(0, 0, 0, 0.05) inset;
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.wrap.player-page.active .bar {
+  box-shadow: 
+    0 12px 48px rgba(0, 0, 0, 0.2),
+    0 0 0 1px rgba(255, 255, 255, 0.7) inset,
+    0 0 0 2px rgba(0, 0, 0, 0.08) inset;
+  background: rgba(255, 255, 255, 0.9);
 }
 
 /* 平滑过渡动画 */
@@ -602,8 +650,8 @@ function commitSeek(v: number) {
 
 .left:hover {
   transform: translateX(2px);
-  background: rgba(99, 102, 241, 0.08);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.1);
+  background: rgba(0, 0, 0, 0.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .meta {
@@ -618,10 +666,7 @@ function commitSeek(v: number) {
   overflow: hidden;
   text-overflow: ellipsis;
   margin-bottom: 2px;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: #333;
   letter-spacing: 0.3px;
   transition: all 0.3s ease;
 }
@@ -632,20 +677,20 @@ function commitSeek(v: number) {
 
 .s {
   font-size: 12px;
-  color: rgba(99, 102, 241, 0.6);
+  color: rgba(0, 0, 0, 0.5);
   font-weight: 500;
   letter-spacing: 0.2px;
   transition: all 0.3s ease;
 }
 
 .left:hover .s {
-  color: rgba(139, 92, 246, 0.8);
+  color: rgba(0, 0, 0, 0.7);
   transform: translateX(2px);
 }
 
 .time {
   font-size: 13px;
-  color: rgba(99, 102, 241, 0.7);
+  color: rgba(0, 0, 0, 0.6);
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   letter-spacing: 0.5px;
@@ -653,7 +698,7 @@ function commitSeek(v: number) {
 }
 
 .time:hover {
-  color: rgba(99, 102, 241, 0.9);
+  color: rgba(0, 0, 0, 0.8);
 }
 
 .progress {
@@ -666,20 +711,16 @@ function commitSeek(v: number) {
   appearance: none;
   height: 6px;
   border-radius: 999px;
-  background: linear-gradient(90deg,
-    rgba(99, 102, 241, 0.25) 0%,
-    rgba(139, 92, 246, 0.15) 100%);
+  background: rgba(0, 0, 0, 0.15);
   outline: none;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: inset 0 1px 3px rgba(99, 102, 241, 0.15);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 .range:hover {
   height: 8px;
-  background: linear-gradient(90deg,
-    rgba(99, 102, 241, 0.3) 0%,
-    rgba(139, 92, 246, 0.2) 100%);
+  background: rgba(0, 0, 0, 0.2);
 }
 
 .range::-webkit-slider-thumb {
@@ -687,9 +728,9 @@ function commitSeek(v: number) {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  border: 3px solid white;
-  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4), 0 0 0 1px rgba(99, 102, 241, 0.2);
+  background: white;
+  border: 3px solid rgba(0, 0, 0, 0.3);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0, 0, 0, 0.1);
   cursor: pointer;
   transition: all 0.3s ease;
   transform: scale(0.9);
@@ -697,12 +738,12 @@ function commitSeek(v: number) {
 
 .range::-webkit-slider-thumb:hover {
   transform: scale(1.15);
-  box-shadow: 0 8px 28px rgba(99, 102, 241, 0.5), 0 0 0 1px rgba(99, 102, 241, 0.3);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.15);
 }
 
 .range::-webkit-slider-thumb:active {
   transform: scale(1.2);
-  box-shadow: 0 10px 32px rgba(99, 102, 241, 0.6), 0 0 0 1px rgba(99, 102, 241, 0.4);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.2);
 }
 
 /* Firefox support */
@@ -710,16 +751,16 @@ function commitSeek(v: number) {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  border: 3px solid white;
-  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4), 0 0 0 1px rgba(99, 102, 241, 0.2);
+  background: white;
+  border: 3px solid rgba(0, 0, 0, 0.3);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0, 0, 0, 0.1);
   cursor: pointer;
   transition: all 0.3s ease;
 }
 
 .range::-moz-range-thumb:hover {
   transform: scale(1.15);
-  box-shadow: 0 8px 28px rgba(99, 102, 241, 0.5), 0 0 0 1px rgba(99, 102, 241, 0.3);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.15);
 }
 
 /* 当前播放队列样式 */
@@ -734,12 +775,12 @@ function commitSeek(v: number) {
 }
 
 .queue-item:hover {
-  background: rgba(99, 102, 241, 0.05);
+  background: rgba(0, 0, 0, 0.05);
 }
 
 .queue-item.active {
-  background: rgba(99, 102, 241, 0.1);
-  border-left: 3px solid #6366f1;
+  background: rgba(0, 0, 0, 0.1);
+  border-left: 3px solid rgba(0, 0, 0, 0.5);
 }
 
 .queue-index {
@@ -750,7 +791,7 @@ function commitSeek(v: number) {
 }
 
 .queue-item.active .queue-index {
-  color: #6366f1;
+  color: rgba(0, 0, 0, 0.8);
   font-weight: 600;
 }
 

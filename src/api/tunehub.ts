@@ -100,13 +100,39 @@ export async function toplists(args: { client: AxiosInstance; source: TuneHubPla
   return res.data.data
 }
 
-export async function toplist(args: { client: AxiosInstance; source: TuneHubPlatform; id: string }) {
+export async function toplist(args: {
+  client: AxiosInstance;
+  source: TuneHubPlatform;
+  id: string;
+}) {
   const res = await args.client.get<TuneHubResponse<{ list: Array<{ id: string; name: string }>; source?: string }>>(
     '/api/',
     { params: { source: args.source, type: 'toplist', id: args.id } },
-  )
-  if (res.data.code !== 200) throw new Error(res.data.message || '请求失败')
-  return res.data.data
+  );
+  if (res.data.code !== 200) throw new Error(res.data.message || '请求失败');
+  return res.data.data;
+}
+
+export async function getStatus(args: { client: AxiosInstance }) {
+  const res = await args.client.get<TuneHubResponse<{
+    service: string;
+    version: string;
+    status: string;
+    platforms: {
+      total: number;
+      enabled: number;
+      loaded: number;
+      platforms: string[];
+    };
+  }>>('/status');
+  if (res.data.code !== 200) throw new Error(res.data.message || '请求失败');
+  return res.data.data;
+}
+
+export async function getHealth(args: { client: AxiosInstance }) {
+  const res = await args.client.get<TuneHubResponse<{ status: string }>>('/health');
+  if (res.data.code !== 200) throw new Error(res.data.message || '请求失败');
+  return res.data.data;
 }
 
 

@@ -52,10 +52,13 @@ export const usePlayerStore = defineStore('player', {
       }
       this.playing = true
       
-      // 只有当播放新歌曲时才更新历史记录和播放计数
+      // 只有当播放新歌曲时才更新历史记录、播放计数和重置播放进度
       if (!isSameTrack) {
         this.addToHistory(track)
         this.incrementPlayCount(track)
+        // 重置播放进度，新歌曲从0开始
+        localStorage.removeItem('player_now')
+        localStorage.removeItem('player_duration')
       }
       
       this.saveSettings()
@@ -68,6 +71,9 @@ export const usePlayerStore = defineStore('player', {
         this.playing = true
         this.addToHistory(this.current)
         this.incrementPlayCount(this.current)
+        // 播放全新列表，重置播放进度
+        localStorage.removeItem('player_now')
+        localStorage.removeItem('player_duration')
         this.saveSettings()
       }
     },
@@ -111,6 +117,11 @@ export const usePlayerStore = defineStore('player', {
       }
 
       if (nextIdx >= 0) {
+        // 只有当切换到不同歌曲时才重置播放进度
+        if (nextIdx !== idx) {
+          localStorage.removeItem('player_now')
+          localStorage.removeItem('player_duration')
+        }
         this.current = this.queue[nextIdx] || null
         this.playing = true
         this.addToHistory(this.current)
@@ -137,7 +148,10 @@ export const usePlayerStore = defineStore('player', {
         }
       }
 
-      if (nextIdx >= 0) {
+      if (nextIdx >= 0 && nextIdx !== idx) {
+        // 切换到不同歌曲，重置播放进度
+        localStorage.removeItem('player_now')
+        localStorage.removeItem('player_duration')
         this.current = this.queue[nextIdx] || null
         this.playing = true
         this.addToHistory(this.current)
