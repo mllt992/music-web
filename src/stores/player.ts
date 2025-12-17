@@ -34,13 +34,25 @@ export const usePlayerStore = defineStore('player', {
     play(track: TrackRef, list?: TrackRef[]) {
       this.current = track
       if (list) {
-        this.queue = [...list]
-      } else if (this.queue.length === 0) {
+        this.queue = Array.isArray(list) ? [...list] : []
+      } else if (!Array.isArray(this.queue) || this.queue.length === 0) {
         this.queue = [track]
       }
       this.playing = true
       this.addToHistory(track)
       this.incrementPlayCount(track)
+      this.saveSettings()
+    },
+    playAll(tracks: TrackRef[], startIndex: number = 0) {
+      if (!Array.isArray(tracks) || tracks.length === 0) return
+      this.queue = [...tracks]
+      if (startIndex >= 0 && startIndex < tracks.length) {
+        this.current = tracks[startIndex]
+        this.playing = true
+        this.addToHistory(this.current)
+        this.incrementPlayCount(this.current)
+        this.saveSettings()
+      }
     },
     toggleMode() {
       const modes: ('order' | 'loop' | 'shuffle')[] = ['order', 'loop', 'shuffle']
@@ -49,7 +61,7 @@ export const usePlayerStore = defineStore('player', {
       this.saveSettings()
     },
     next() {
-      if (!this.current || this.queue.length === 0) return
+      if (!this.current || !Array.isArray(this.queue) || this.queue.length === 0) return
 
       const idx = this.queue.findIndex(t => t.id === this.current?.id && t.platform === this.current?.platform)
       let nextIdx = -1
@@ -78,10 +90,12 @@ export const usePlayerStore = defineStore('player', {
         this.current = this.queue[nextIdx]
         this.playing = true
         this.addToHistory(this.current)
+        this.incrementPlayCount(this.current)
+        this.saveSettings()
       }
     },
     prev() {
-      if (!this.current || this.queue.length === 0) return
+      if (!this.current || !Array.isArray(this.queue) || this.queue.length === 0) return
 
       const idx = this.queue.findIndex(t => t.id === this.current?.id && t.platform === this.current?.platform)
       let nextIdx = -1
@@ -103,20 +117,63 @@ export const usePlayerStore = defineStore('player', {
         this.current = this.queue[nextIdx]
         this.playing = true
         this.addToHistory(this.current)
+        this.incrementPlayCount(this.current)
+        this.saveSettings()
       }
     },
     saveSettings() {
       localStorage.setItem('player_mode', this.mode)
       localStorage.setItem('music_playCounts', JSON.stringify(this.playCounts))
+      
+      // 保存当前播放状态
+      if (this.current) {
+        localStorage.setItem('player_current', JSON.stringify(this.current))
+      } else {
+        localStorage.removeItem('player_current')
+      }
+      
+      localStorage.setItem('player_queue', JSON.stringify(this.queue))
+      localStorage.setItem('player_playing', String(this.playing))
+      localStorage.setItem('player_quality', this.quality)
     },
     loadSettings() {
       const m = localStorage.getItem('player_mode')
       if (m && ['order', 'loop', 'shuffle'].includes(m)) {
         this.mode = m as 'order' | 'loop' | 'shuffle'
       }
+      
+      // 加载当前播放状态
+      const currentTrack = localStorage.getItem('player_current')
+      if (currentTrack) {
+        try {
+          this.current = JSON.parse(currentTrack)
+        } catch {
+          this.current = null
+        }
+      }
+      
+      const queue = localStorage.getItem('player_queue')
+      if (queue) {
+        try {
+          this.queue = JSON.parse(queue)
+        } catch {
+          this.queue = []
+        }
+      }
+      
+      const playing = localStorage.getItem('player_playing')
+      if (playing) {
+        this.playing = playing === 'true'
+      }
+      
+      const quality = localStorage.getItem('player_quality')
+      if (quality && ['128k', '320k', 'flac', 'flac24bit'].includes(quality)) {
+        this.quality = quality as TuneHubQuality
+      }
     },
     pause() {
       this.playing = false
+      this.saveSettings()
     },
     syncToAppStore() {
       const app = useAppStore()
@@ -126,6 +183,9 @@ export const usePlayerStore = defineStore('player', {
       app.persist()
     },
     addToHistory(track: TrackRef) {
+      if (!Array.isArray(this.history)) {
+        this.history = []
+      }
       const exists = this.history.findIndex(t => t.id === track.id && t.platform === track.platform)
       if (exists >= 0) {
         this.history.splice(exists, 1)
@@ -148,6 +208,9 @@ export const usePlayerStore = defineStore('player', {
       }
     },
     toggleFavorite(track: TrackRef) {
+      if (!Array.isArray(this.favorites)) {
+        this.favorites = []
+      }
       const idx = this.favorites.findIndex(t => t.id === track.id && t.platform === track.platform)
       if (idx >= 0) {
         this.favorites.splice(idx, 1)
@@ -158,6 +221,7 @@ export const usePlayerStore = defineStore('player', {
       this.syncToAppStore()
     },
     isFavorite(track: TrackRef): boolean {
+      if (!Array.isArray(this.favorites)) return false
       return this.favorites.some(t => t.id === track.id && t.platform === track.platform)
     },
     loadFavorites() {
@@ -171,6 +235,9 @@ export const usePlayerStore = defineStore('player', {
       }
     },
     createPlaylist(name: string) {
+      if (!Array.isArray(this.playlists)) {
+        this.playlists = []
+      }
       const playlist: Playlist = {
         id: Date.now().toString(),
         name,
@@ -182,6 +249,7 @@ export const usePlayerStore = defineStore('player', {
       return playlist
     },
     deletePlaylist(id: string) {
+      if (!Array.isArray(this.playlists)) return
       const idx = this.playlists.findIndex(p => p.id === id)
       if (idx >= 0) {
         this.playlists.splice(idx, 1)
@@ -189,8 +257,12 @@ export const usePlayerStore = defineStore('player', {
       }
     },
     addTrackToPlaylist(playlistId: string, track: TrackRef) {
+      if (!Array.isArray(this.playlists)) return
       const playlist = this.playlists.find(p => p.id === playlistId)
       if (!playlist) return
+      if (!Array.isArray(playlist.tracks)) {
+        playlist.tracks = []
+      }
       const exists = playlist.tracks.findIndex(t => t.id === track.id && t.platform === track.platform)
       if (exists < 0) {
         playlist.tracks.push(track)
@@ -198,8 +270,9 @@ export const usePlayerStore = defineStore('player', {
       }
     },
     removeTrackFromPlaylist(playlistId: string, trackId: string, platform?: string) {
+      if (!Array.isArray(this.playlists)) return
       const playlist = this.playlists.find(p => p.id === playlistId)
-      if (!playlist) return
+      if (!playlist || !Array.isArray(playlist.tracks)) return
       const idx = playlist.tracks.findIndex(t => t.id === trackId && t.platform === platform)
       if (idx >= 0) {
         playlist.tracks.splice(idx, 1)
@@ -242,9 +315,9 @@ export const usePlayerStore = defineStore('player', {
     },
     loadFromAppStore() {
       const app = useAppStore()
-      this.favorites = app.data.favorites
-      this.history = app.data.history
-      this.playlists = app.data.playlists
+      this.favorites = Array.isArray(app.data.favorites) ? app.data.favorites : []
+      this.history = Array.isArray(app.data.history) ? app.data.history : []
+      this.playlists = Array.isArray(app.data.playlists) ? app.data.playlists : []
     },
   },
 })

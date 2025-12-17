@@ -20,6 +20,27 @@ const newPlaylistName = ref('')
 onMounted(() => {
   player.loadPlaylists()
   player.loadSettings()
+  player.loadHistory()
+  player.loadFavorites()
+  player.loadPlayCounts()
+  
+  // 尝试从 sessionStorage 恢复播放进度和总时长
+  const savedTime = sessionStorage.getItem('player_now')
+  const savedDuration = sessionStorage.getItem('player_duration')
+  
+  if (savedTime) {
+    const time = parseFloat(savedTime)
+    if (!isNaN(time) && isFinite(time) && time > 0) {
+      currentTime.value = time
+    }
+  }
+  
+  if (savedDuration) {
+    const savedDurationValue = parseFloat(savedDuration)
+    if (!isNaN(savedDurationValue) && isFinite(savedDurationValue) && savedDurationValue > 0) {
+      duration.value = savedDurationValue
+    }
+  }
 })
 
 const qualityOptions: SelectOption[] = [
@@ -83,8 +104,28 @@ watch(
     if (!el) return
     if (!audioSrc.value) return
     try {
-      // 重点：不要设置 crossorigin，否则目标音频域没配 CORS 时会导致“无声/加载失败”
+      // 获取保存的播放时间
+      const savedTime = sessionStorage.getItem('player_now')
+      const timeToRestore = savedTime ? parseFloat(savedTime) : 0
+      
+      // 重置状态，但保留时间
+      duration.value = 0
+      seeking.value = false
+      
+      // 重点：不要设置 crossorigin，否则目标音频域没配 CORS 时会导致"无声/加载失败"
       el.src = audioSrc.value
+      
+      // 添加音频加载事件监听，确保获取到正确的时长
+      el.addEventListener('loadeddata', () => {
+        duration.value = el.duration || 0
+        
+        // 恢复保存的播放时间
+        if (!isNaN(timeToRestore) && isFinite(timeToRestore) && timeToRestore > 0 && timeToRestore < el.duration) {
+          el.currentTime = timeToRestore
+          currentTime.value = timeToRestore
+        }
+      }, { once: true })
+      
       if (player.playing) await el.play()
     } catch (e) {
       message.error((e as Error).message || '播放失败（可能是跨域或资源不可用）')
@@ -104,6 +145,13 @@ watch(
     } catch {
       player.pause()
     }
+  },
+)
+
+watch(
+  () => player.quality,
+  () => {
+    player.saveSettings()
   },
 )
 
@@ -131,18 +179,39 @@ function onEnded() {
 function onTimeUpdate() {
   const el = audioRef.value
   if (!el || seeking.value) return
-  currentTime.value = el.currentTime || 0
-  sessionStorage.setItem('player_now', String(currentTime.value))
+  
+  // 确保获取到有效的当前时间
+  const current = el.currentTime
+  if (current && !isNaN(current) && isFinite(current)) {
+    currentTime.value = current
+    sessionStorage.setItem('player_now', String(currentTime.value))
+  }
 }
 
 function onLoadedMeta() {
   const el = audioRef.value
   if (!el) return
-  duration.value = el.duration || 0
+  
+  // 确保获取到有效的时长
+  const audioDuration = el.duration
+  if (audioDuration && !isNaN(audioDuration) && isFinite(audioDuration)) {
+    duration.value = audioDuration
+    sessionStorage.setItem('player_duration', String(audioDuration))
+  } else {
+    // 如果获取不到时长，尝试等待一段时间再获取
+    setTimeout(() => {
+      if (el.duration && !isNaN(el.duration) && isFinite(el.duration)) {
+        duration.value = el.duration
+        sessionStorage.setItem('player_duration', String(el.duration))
+      }
+    }, 1000)
+  }
 }
 
 function formatTime(sec: number) {
-  if (!Number.isFinite(sec) || sec <= 0) return '0:00'
+  // 添加更严格的时间验证
+  if (!sec || isNaN(sec) || !isFinite(sec) || sec < 0) return '0:00'
+  
   const m = Math.floor(sec / 60)
   const s = Math.floor(sec % 60)
   return `${m}:${s.toString().padStart(2, '0')}`
@@ -193,7 +262,12 @@ function commitSeek(v: number) {
                 <path d="M8 5v14l11-7z"/>
               </svg>
             </NButton>
-            <NButton circle size="small" :disabled="!player.current">
+            <NButton circle size="small" :disabled="!player.current" @click="player.prev()">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+              </svg>
+            </NButton>
+            <NButton circle size="small" :disabled="!player.current" @click="player.next()">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
               </svg>
@@ -296,7 +370,6 @@ function commitSeek(v: number) {
   display: flex;
   justify-content: center;
   padding: 0 14px 14px 14px;
-  pointer-events: none;
 }
 
 .bar {
@@ -311,15 +384,6 @@ function commitSeek(v: number) {
   grid-template-columns: 1fr auto;
   gap: 12px;
   align-items: center;
-  transform: translateY(100px);
-  opacity: 0;
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  pointer-events: auto;
-}
-
-.wrap.active .bar {
-  transform: translateY(0);
-  opacity: 1;
 }
 
 .bar:hover {

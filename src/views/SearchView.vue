@@ -56,6 +56,17 @@ async function doSearch() {
   }
 }
 
+function playAllSearchResults() {
+  const tracks = rows.value.map(r => ({
+    id: r.id,
+    name: r.name,
+    artist: r.artist,
+    album: r.album,
+    platform: (r.platform as TuneHubPlatform) || platform.value
+  }))
+  player.playAll(tracks)
+}
+
 const columns = computed<DataTableColumns<TuneHubSearchResult>>(() => [
   {
     title: '歌曲',
@@ -118,6 +129,15 @@ const columns = computed<DataTableColumns<TuneHubSearchResult>>(() => [
       <div v-else class="results surface-inset">
         <div class="results-header">
           <div class="results-count">找到 {{ rows.length }} 首歌曲</div>
+          <NButton size="small" type="primary" @click="player.playAll(rows.map(r => ({
+              id: r.id,
+              name: r.name,
+              artist: r.artist,
+              album: r.album,
+              platform: (r.platform as TuneHubPlatform) || platform
+            })))">
+            播放全部
+          </NButton>
         </div>
         <div class="results-grid">
           <div
@@ -155,9 +175,10 @@ const columns = computed<DataTableColumns<TuneHubSearchResult>>(() => [
 <style scoped>
 .head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   margin-bottom: 12px;
+  gap: 12px;
 }
 
 .toolbar {
@@ -178,6 +199,9 @@ const columns = computed<DataTableColumns<TuneHubSearchResult>>(() => [
 
 .results-header {
   margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .results-count {

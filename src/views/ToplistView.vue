@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NEmpty, NSpin, useMessage } from 'naive-ui'
+import { NButton, NEmpty, NSpin, useMessage } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { createTuneHubClient, toplist, type TuneHubPlatform } from '../api/tunehub'
@@ -37,6 +37,17 @@ function loadMore() {
   displayLimit.value += 20
 }
 
+function playAllSongs() {
+  const tracks = songs.value.map(s => ({
+    id: s.id,
+    name: s.name,
+    artist: s.artist,
+    album: s.album,
+    platform: source.value
+  }))
+  player.playAll(tracks)
+}
+
 onMounted(async () => {
   await loadBoardSongs()
 })
@@ -49,6 +60,14 @@ onMounted(async () => {
         <div class="section-title">{{ boardName }}</div>
         <div class="section-subtitle">{{ songs.length }} 首歌曲</div>
       </div>
+      <NButton 
+        v-if="songs.length > 0" 
+        size="small" 
+        type="primary" 
+        @click="playAllSongs"
+      >
+        播放全部
+      </NButton>
     </div>
 
     <NSpin :show="loading">
@@ -90,6 +109,9 @@ onMounted(async () => {
 
 .head {
   margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .songs-grid {

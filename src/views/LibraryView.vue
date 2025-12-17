@@ -10,6 +10,7 @@ const newPlaylistName = ref('')
 const searchQuery = ref('')
 
 const filteredFavorites = computed(() => {
+  if (!Array.isArray(player.favorites)) return []
   if (!searchQuery.value) return player.favorites
   const query = searchQuery.value.toLowerCase()
   return player.favorites.filter(track => 
@@ -19,6 +20,7 @@ const filteredFavorites = computed(() => {
 })
 
 const filteredHistory = computed(() => {
+  if (!Array.isArray(player.history)) return []
   if (!searchQuery.value) return player.history.slice(0, 20)
   const query = searchQuery.value.toLowerCase()
   const filtered = player.history.filter(track => 
@@ -29,6 +31,7 @@ const filteredHistory = computed(() => {
 })
 
 const filteredPlaylists = computed(() => {
+  if (!Array.isArray(player.playlists)) return []
   if (!searchQuery.value) return player.playlists
   const query = searchQuery.value.toLowerCase()
   return player.playlists.filter(playlist => {
