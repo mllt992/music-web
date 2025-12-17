@@ -131,6 +131,7 @@ const selectedKey = computed(() => (route.path === '/' ? '/discover' : route.pat
             v-if="route.path !== '/player'" 
             class="middle-container" 
             has-sider
+            style="height: 100%;"
           >
             <!-- 左边：Aside -->
             <NLayoutSider
@@ -192,7 +193,7 @@ const selectedKey = computed(() => (route.path === '/' ? '/discover' : route.pat
             </NLayoutSider>
 
             <!-- 右边：Content -->
-            <NLayoutContent class="content surface">
+            <NLayoutContent class="content surface" style="height: 100%; overflow-y: auto;">
               <div class="container">
                 <router-view />
               </div>
@@ -266,6 +267,7 @@ const selectedKey = computed(() => (route.path === '/' ? '/discover' : route.pat
   box-shadow: var(--shadow-soft);
   border-left: 1px solid rgba(99, 102, 241, 0.15);
   border-right: 1px solid rgba(99, 102, 241, 0.15);
+  height: 100%;
 }
 
 .sider {
@@ -473,14 +475,29 @@ const selectedKey = computed(() => (route.path === '/' ? '/discover' : route.pat
 
 .content {
   padding: 20px;
-  overflow-y: auto;
+  overflow-y: scroll;
   margin: 0;
   border-radius: 0;
   background: transparent;
   backdrop-filter: none;
   box-shadow: none;
-  height: 100%;
   flex: 1;
+  min-height: 0;
+  /* 覆盖全局滚动条隐藏样式 */
+  -ms-overflow-style: auto !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(99, 102, 241, 0.3) transparent !important;
+}
+
+/* 确保滚动条可见 */
+.content::-webkit-scrollbar {
+  width: 8px !important;
+  height: 8px !important;
+}
+
+.content::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.3) !important;
+  border-radius: 4px !important;
 }
 
 .container {
