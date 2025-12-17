@@ -28,6 +28,44 @@ const conflictOptions = [
 
 const canSave = computed(() => true)
 
+const sleepMinutes = ref(30)
+const sleepTimerActive = ref(false)
+const sleepEndTime = ref(0)
+let sleepTimerInterval: ReturnType<typeof setInterval> | null = null
+
+const formatSleepTime = computed(() => {
+  const remaining = Math.max(0, Math.floor((sleepEndTime.value - Date.now()) / 1000))
+  const mins = Math.floor(remaining / 60)
+  const secs = remaining % 60
+  return `${mins}:${secs.toString().padStart(2, '0')}`
+})
+
+function startSleepTimer() {
+  if (!sleepMinutes.value || sleepMinutes.value < 1) {
+    message.error('请输入有效的分钟数')
+    return
+  }
+  sleepEndTime.value = Date.now() + sleepMinutes.value * 60 * 1000
+  sleepTimerActive.value = true
+  message.success(`已设置 ${sleepMinutes.value} 分钟后关闭`)
+  
+  sleepTimerInterval = setInterval(() => {
+    if (Date.now() >= sleepEndTime.value) {
+      cancelSleepTimer()
+      window.close()
+    }
+  }, 1000)
+}
+
+function cancelSleepTimer() {
+  sleepTimerActive.value = false
+  if (sleepTimerInterval) {
+    clearInterval(sleepTimerInterval)
+    sleepTimerInterval = null
+  }
+  message.info('已取消定时关闭')
+}
+
 function save() {
   app.persist()
   message.success('已保存设置')
@@ -114,18 +152,33 @@ watch(
         你把“音乐 API 文档”贴出来后，我会把接口逐条落到发现/搜索/歌单/播放器等页面，并把本地收藏/历史与接口数据串起来。
       </NAlert>
 
-      <NCard size="small" title="音乐 API（配置）">
-        <NForm :model="app.data.settings" label-placement="left" label-width="110">
-          <NFormItem label="Base URL">
-            <NInput v-model:value="app.data.settings.api.baseUrl" placeholder="例如：http://127.0.0.1:3000" />
-          </NFormItem>
-          <NSpace>
-            <NButton type="primary" :disabled="!canSave" @click="save">保存</NButton>
-            <NButton @click="copyExport">导出（复制 JSON）</NButton>
-            <NButton @click="importing = true">导入（粘贴 JSON）</NButton>
-          </NSpace>
-        </NForm>
-      </NCard>
+        <NCard size="small" title="音乐 API（配置）">
+          <NForm :model="app.data.settings" label-placement="left" label-width="110">
+            <NFormItem label="Base URL">
+              <NInput v-model:value="app.data.settings.api.baseUrl" placeholder="例如：http://127.0.0.1:3000" />
+            </NFormItem>
+            <NSpace>
+              <NButton type="primary" :disabled="!canSave" @click="save">保存</NButton>
+              <NButton @click="copyExport">导出（复制 JSON）</NButton>
+              <NButton @click="importing = true">导入（粘贴 JSON）</NButton>
+            </NSpace>
+          </NForm>
+        </NCard>
+
+        <NCard size="small" title="定时关闭">
+          <NForm :model="app.data.settings" label-placement="left" label-width="110">
+            <NFormItem label="定时关闭">
+              <NSpace>
+                <NInputNumber v-model:value="sleepMinutes" :min="1" :max="180" placeholder="分钟" style="width: 120px" />
+                <NButton :disabled="sleepTimerActive" @click="startSleepTimer">启动</NButton>
+                <NButton v-if="sleepTimerActive" type="error" @click="cancelSleepTimer">取消</NButton>
+              </NSpace>
+            </NFormItem>
+            <NAlert v-if="sleepTimerActive" type="info" :bordered="false">
+              将在 {{ formatSleepTime }} 后自动关闭
+            </NAlert>
+          </NForm>
+        </NCard>
 
       <NCard size="small" title="WebDAV 同步（配置）">
         <NForm :model="app.data.settings.webdav" label-placement="left" label-width="110">

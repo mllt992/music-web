@@ -1,14 +1,34 @@
 <script setup lang="ts">
-import { NEmpty, NTabs, NTabPane } from 'naive-ui'
-import { onMounted } from 'vue'
+import { NEmpty, NTabs, NTabPane, NButton, NModal, NInput, NSpace, useMessage } from 'naive-ui'
+import { onMounted, ref } from 'vue'
 import { usePlayerStore } from '../stores/player'
 
 const player = usePlayerStore()
+const message = useMessage()
+const showCreatePlaylist = ref(false)
+const newPlaylistName = ref('')
 
 onMounted(() => {
   player.loadHistory()
   player.loadFavorites()
+  player.loadPlaylists()
 })
+
+function createPlaylist() {
+  if (!newPlaylistName.value.trim()) {
+    message.error('请输入歌单名称')
+    return
+  }
+  player.createPlaylist(newPlaylistName.value.trim())
+  message.success('歌单创建成功')
+  newPlaylistName.value = ''
+  showCreatePlaylist.value = false
+}
+
+function deletePlaylist(id: string) {
+  player.deletePlaylist(id)
+  message.success('歌单已删除')
+}
 </script>
 
 <template>
@@ -18,6 +38,7 @@ onMounted(() => {
         <div class="section-title">音乐库</div>
         <div class="section-subtitle">收藏 · 历史 · 歌单</div>
       </div>
+      <NButton type="primary" @click="showCreatePlaylist = true">创建歌单</NButton>
     </div>
 
     <NTabs type="segment" animated>
@@ -74,7 +95,53 @@ onMounted(() => {
           </div>
         </div>
       </NTabPane>
+      <NTabPane name="playlists" tab="歌单">
+        <NEmpty v-if="player.playlists.length === 0" description="暂无歌单，点击右上角创建" />
+        <div v-else class="playlists-container">
+          <div v-for="playlist in player.playlists" :key="playlist.id" class="playlist-card">
+            <div class="playlist-header">
+              <div class="playlist-info">
+                <div class="playlist-name">{{ playlist.name }}</div>
+                <div class="playlist-count">{{ playlist.tracks.length }} 首歌曲</div>
+              </div>
+              <NButton size="small" type="error" @click="deletePlaylist(playlist.id)">删除</NButton>
+            </div>
+            <NEmpty v-if="playlist.tracks.length === 0" description="暂无歌曲" style="padding: 20px 0;" />
+            <div v-else class="songs-list">
+              <div
+                v-for="(track, idx) in playlist.tracks"
+                :key="`${track.id}-${track.platform}-${idx}`"
+                class="song-item"
+                @click="player.play(track)"
+              >
+                <div class="song-index">{{ idx + 1 }}</div>
+                <div class="song-info">
+                  <div class="song-name">{{ track.name }}</div>
+                  <div v-if="track.artist" class="song-artist">{{ track.artist }}</div>
+                </div>
+                <NButton size="tiny" quaternary @click.stop="player.removeTrackFromPlaylist(playlist.id, track.id, track.platform)">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                  </svg>
+                </NButton>
+              </div>
+            </div>
+          </div>
+        </div>
+      </NTabPane>
     </NTabs>
+
+    <NModal v-model:show="showCreatePlaylist" preset="dialog" title="创建歌单">
+      <NSpace vertical>
+        <NInput v-model:value="newPlaylistName" placeholder="请输入歌单名称" @keyup.enter="createPlaylist" />
+      </NSpace>
+      <template #action>
+        <NSpace>
+          <NButton @click="showCreatePlaylist = false">取消</NButton>
+          <NButton type="primary" @click="createPlaylist">创建</NButton>
+        </NSpace>
+      </template>
+    </NModal>
   </div>
 </template>
 
@@ -85,6 +152,9 @@ onMounted(() => {
 
 .head {
   margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .songs-grid {
@@ -205,6 +275,88 @@ onMounted(() => {
   to {
     opacity: 1;
   }
+}
+
+.playlists-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.playlist-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  background: white;
+}
+
+.playlist-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.playlist-name {
+  font-weight: 600;
+  font-size: 16px;
+  margin-bottom: 4px;
+}
+
+.playlist-count {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.songs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.song-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.song-item:hover {
+  background: rgba(99, 102, 241, 0.05);
+}
+
+.song-index {
+  font-size: 13px;
+  color: var(--muted);
+  min-width: 24px;
+  text-align: center;
+}
+
+.song-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.song-name {
+  font-size: 14px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.song-artist {
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>
 

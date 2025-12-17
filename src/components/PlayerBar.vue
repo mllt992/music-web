@@ -122,39 +122,56 @@ function commitSeek(v: number) {
       </div>
     </div>
 
-      <div class="center">
-        <NSpace align="center">
-          <NButton size="small" :disabled="!player.current" @click="player.playing ? player.pause() : (player.playing = true)">
-            {{ player.playing ? '暂停' : '播放' }}
-          </NButton>
-          <NButton 
-            size="small" 
-            :disabled="!player.current"
-            :type="player.current && player.isFavorite(player.current) ? 'error' : 'default'"
-            @click.stop="player.current && player.toggleFavorite(player.current)"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" :fill="player.current && player.isFavorite(player.current) ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2">
-              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-            </svg>
-          </NButton>
-          <NButton 
-            size="small" 
-            :disabled="!audioSrc"
-            tag="a"
-            :href="audioSrc"
-            :download="player.current ? `${player.current.name}.mp3` : undefined"
-            target="_blank"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="7 10 12 15 17 10"/>
-              <line x1="12" y1="15" x2="12" y2="3"/>
-            </svg>
-          </NButton>
-          <NSelect v-model:value="player.quality" size="small" :options="qualityOptions" style="width: 140px" />
-          <div class="time">{{ formatTime(currentTime) }} / {{ formatTime(duration) }}</div>
-        </NSpace>
-      </div>
+        <div class="center">
+          <NSpace align="center" :size="8">
+            <NButton circle size="small" :disabled="!player.current">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+              </svg>
+            </NButton>
+            <NButton circle :disabled="!player.current" @click="player.playing ? player.pause() : (player.playing = true)">
+              <svg v-if="player.playing" width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
+              </svg>
+              <svg v-else width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M8 5v14l11-7z"/>
+              </svg>
+            </NButton>
+            <NButton circle size="small" :disabled="!player.current">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M16 18l-8.5-6L16 6v12zm-2-12v12h2V6h-2z"/>
+              </svg>
+            </NButton>
+            <NButton 
+              circle
+              size="small" 
+              :disabled="!player.current"
+              :type="player.current && player.isFavorite(player.current) ? 'error' : 'default'"
+              @click.stop="player.current && player.toggleFavorite(player.current)"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" :fill="player.current && player.isFavorite(player.current) ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2">
+                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+              </svg>
+            </NButton>
+            <NButton 
+              circle
+              size="small" 
+              :disabled="!audioSrc"
+              tag="a"
+              :href="audioSrc"
+              :download="player.current ? `${player.current.name}.mp3` : undefined"
+              target="_blank"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+            </NButton>
+            <NSelect v-model:value="player.quality" size="small" :options="qualityOptions" style="width: 140px" />
+            <div class="time">{{ formatTime(currentTime) }} / {{ formatTime(duration) }}</div>
+          </NSpace>
+        </div>
 
     <div class="progress" v-if="player.current">
       <input
