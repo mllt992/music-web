@@ -8,6 +8,7 @@ const routes: RouteRecordRaw[] = [
     children: [
       { path: '', redirect: '/discover' },
       { path: 'discover', component: () => import('../views/DiscoverView.vue') },
+      { path: 'toplist', component: () => import('../views/ToplistView.vue') },
       { path: 'search', component: () => import('../views/SearchView.vue') },
       { path: 'library', component: () => import('../views/LibraryView.vue') },
       { path: 'settings', component: () => import('../views/SettingsView.vue') },

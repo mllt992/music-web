@@ -98,22 +98,19 @@ const columns = computed<DataTableColumns<TuneHubSearchResult>>(() => [
       </div>
     </div>
 
-    <div class="toolbar surface-inset">
-      <NSpace align="center" wrap>
-        <NInput
-          v-model:value="keyword"
-          placeholder="搜索歌曲 / 歌手 / 专辑 / 歌单…"
-          clearable
-          @keyup.enter="doSearch"
-        />
-        <NSelect v-model:value="mode" :options="modeOptions" style="width: 160px" />
-        <NSelect v-if="mode === 'single'" v-model:value="platform" :options="platformOptions" style="width: 180px" />
-        <NButton type="primary" :loading="loading" :disabled="!keyword.trim()" @click="doSearch">搜索</NButton>
-      </NSpace>
-      <div class="tip">
-        Base URL：<span class="mono">{{ baseUrl }}</span>
+      <div class="toolbar surface-inset">
+        <NSpace align="center" wrap>
+          <NInput
+            v-model:value="keyword"
+            placeholder="搜索歌曲 / 歌手 / 专辑 / 歌单…"
+            clearable
+            @keyup.enter="doSearch"
+          />
+          <NSelect v-model:value="mode" :options="modeOptions" style="width: 160px" />
+          <NSelect v-if="mode === 'single'" v-model:value="platform" :options="platformOptions" style="width: 180px" />
+          <NButton type="primary" :loading="loading" :disabled="!keyword.trim()" @click="doSearch">搜索</NButton>
+        </NSpace>
       </div>
-    </div>
 
     <div class="gap" />
 
@@ -168,15 +165,7 @@ const columns = computed<DataTableColumns<TuneHubSearchResult>>(() => [
   animation: fadeIn 0.3s ease;
 }
 
-.tip {
-  margin-top: 8px;
-  font-size: 12px;
-  color: var(--muted);
-}
-.mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
-  color: var(--fg0);
-}
+
 
 .gap {
   height: 12px;
