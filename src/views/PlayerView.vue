@@ -38,7 +38,7 @@ const lyricsContainer = ref<HTMLElement | null>(null)
 const showCover = ref(true)
 
 function setNowFromStorage() {
-  const raw = sessionStorage.getItem('player_now')
+  const raw = localStorage.getItem('player_now')
   now.value = raw ? Number(raw) || 0 : 0
 }
 
