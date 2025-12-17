@@ -33,35 +33,45 @@ export const usePlayerStore = defineStore('player', {
     playCounts: {} as Record<string, number>,
   }),
   actions: {
-    play(track: TrackRef, list?: TrackRef[]) {
-      // 保存当前歌曲，用于比较是否是同一首歌
-      const isSameTrack = this.current && this.current.id === track.id && this.current.platform === track.platform
-      
-      this.current = track
-      if (list) {
-        this.queue = Array.isArray(list) ? [...list] : []
-      } else if (!Array.isArray(this.queue) || this.queue.length === 0) {
-        this.queue = [track]
-      } else {
-        // 检查歌曲是否已经在队列中
-        const exists = this.queue.findIndex(t => t.id === track.id && t.platform === track.platform)
-        if (exists === -1) {
-          // 将新歌曲添加到队列中，保持当前歌曲在队列中
-          this.queue.push(track)
-        }
+    play(track: TrackRef, forceRefresh?: boolean, list?: TrackRef[]) {
+    // 检查是否是同一首歌
+    const isSameTrack = this.current && this.current.id === track.id && this.current.platform === track.platform
+    
+    this.current = track
+    if (list) {
+      this.queue = Array.isArray(list) ? [...list] : []
+    } else if (!Array.isArray(this.queue) || this.queue.length === 0) {
+      this.queue = [track]
+    } else {
+      // 检查歌曲是否已经在队列中
+      const exists = this.queue.findIndex(t => t.id === track.id && t.platform === track.platform)
+      if (exists === -1) {
+        // 将新歌曲添加到队列中
+        this.queue.push(track)
       }
-      this.playing = true
-      
+    }
+    this.playing = true
+    
+    // 刷新时清除缓存和重置播放进度
+    if (forceRefresh) {
+      // 清除当前歌曲的realUrl缓存
+      if (track.realUrl) {
+        track.realUrl = undefined
+        track.realUrlTimestamp = undefined
+      }
+      // 重置播放进度
+      localStorage.removeItem('player_now')
+      localStorage.removeItem('player_duration')
+    } else if (!isSameTrack) {
       // 只有当播放新歌曲时才更新历史记录、播放计数和重置播放进度
-      if (!isSameTrack) {
-        this.addToHistory(track)
-        this.incrementPlayCount(track)
-        // 重置播放进度，新歌曲从0开始
-        localStorage.removeItem('player_now')
-        localStorage.removeItem('player_duration')
-      }
-      
-      this.saveSettings()
+      this.addToHistory(track)
+      this.incrementPlayCount(track)
+      // 重置播放进度
+      localStorage.removeItem('player_now')
+      localStorage.removeItem('player_duration')
+    }
+    
+    this.saveSettings()
     },
     playAll(tracks: TrackRef[], startIndex: number = 0) {
       if (!Array.isArray(tracks) || tracks.length === 0) return
