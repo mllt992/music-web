@@ -1,3 +1,5 @@
+import type { TuneHubPlatform } from '../api/tunehub'
+
 export type ConflictStrategy = 'server_wins' | 'client_wins'
 
 export type WebDavConfig = {

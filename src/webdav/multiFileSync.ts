@@ -138,11 +138,9 @@ export async function webdavDownloadMultiFile(
   const client = createWebDavClient(cfg)
   
   try {
-    // 检查元数据文件是否存在
-    let metadata: SyncMetadata | null = null
+    // 检查元数据文件是否存在（保留用于未来版本扩展）
     try {
-      const metadataRaw = await client.getFileContents('/music-app/metadata.json', { format: 'text' })
-      metadata = JSON.parse(metadataRaw as string)
+      await client.getFileContents('/music-app/metadata.json', { format: 'text' })
     } catch {
       // 元数据文件不存在，可能是旧版本或首次同步
     }
@@ -219,7 +217,9 @@ export async function webdavGetFileList(cfg: WebDavConfig): Promise<string[]> {
   
   try {
     const contents = await client.getDirectoryContents('/music-app/', { deep: false })
-    return contents.map(item => typeof item === 'string' ? item : item.filename)
+    // 处理不同类型的返回值
+    const fileStats = Array.isArray(contents) ? contents : (contents.data || [])
+    return fileStats.map((item: any) => typeof item === 'string' ? item : item.filename)
   } catch {
     return []
   }

@@ -47,7 +47,7 @@ export const usePlayerStore = defineStore('player', {
       if (!Array.isArray(tracks) || tracks.length === 0) return
       this.queue = [...tracks]
       if (startIndex >= 0 && startIndex < tracks.length) {
-        this.current = tracks[startIndex]
+        this.current = tracks[startIndex] || null
         this.playing = true
         this.addToHistory(this.current)
         this.incrementPlayCount(this.current)
@@ -56,8 +56,9 @@ export const usePlayerStore = defineStore('player', {
     },
     toggleMode() {
       const modes: ('order' | 'loop' | 'shuffle')[] = ['order', 'loop', 'shuffle']
-      const idx = modes.indexOf(this.mode)
-      this.mode = modes[(idx + 1) % modes.length]
+      const currentMode = this.mode as 'order' | 'loop' | 'shuffle'
+      const idx = modes.indexOf(currentMode)
+      this.mode = modes[(idx + 1) % modes.length] as 'order' | 'loop' | 'shuffle'
       this.saveSettings()
     },
     next() {
@@ -87,7 +88,7 @@ export const usePlayerStore = defineStore('player', {
       }
 
       if (nextIdx >= 0) {
-        this.current = this.queue[nextIdx]
+        this.current = this.queue[nextIdx] || null
         this.playing = true
         this.addToHistory(this.current)
         this.incrementPlayCount(this.current)
@@ -114,7 +115,7 @@ export const usePlayerStore = defineStore('player', {
       }
 
       if (nextIdx >= 0) {
-        this.current = this.queue[nextIdx]
+        this.current = this.queue[nextIdx] || null
         this.playing = true
         this.addToHistory(this.current)
         this.incrementPlayCount(this.current)
@@ -182,7 +183,8 @@ export const usePlayerStore = defineStore('player', {
       app.data.playlists = this.playlists
       app.persist()
     },
-    addToHistory(track: TrackRef) {
+    addToHistory(track: TrackRef | null) {
+      if (!track) return
       if (!Array.isArray(this.history)) {
         this.history = []
       }
@@ -293,7 +295,8 @@ export const usePlayerStore = defineStore('player', {
         }
       }
     },
-    incrementPlayCount(track: TrackRef) {
+    incrementPlayCount(track: TrackRef | null) {
+      if (!track) return
       const key = `${track.platform}-${track.id}`
       this.playCounts[key] = (this.playCounts[key] || 0) + 1
       localStorage.setItem('music_playCounts', JSON.stringify(this.playCounts))

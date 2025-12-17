@@ -1,16 +1,15 @@
 <script setup lang="ts">
 import {
   NButton,
-  NDataTable,
   NEmpty,
   NInput,
   NSelect,
   NSpace,
   useMessage,
 } from 'naive-ui'
-import type { DataTableColumns, SelectOption } from 'naive-ui'
-import { computed, h, ref } from 'vue'
-import { createTuneHubClient, aggregateSearch, search, type TuneHubPlatform, type TuneHubSearchResult } from '../api/tunehub'
+import type { SelectOption } from 'naive-ui'
+import { computed, ref } from 'vue'
+import { createTuneHubClient, aggregateSearch, search, buildApiUrl, type TuneHubPlatform, type TuneHubSearchResult } from '../api/tunehub'
 import { useAppStore } from '../stores/app'
 import { usePlayerStore } from '../stores/player'
 
@@ -37,6 +36,15 @@ const modeOptions: SelectOption[] = [
 const baseUrl = computed(() => app.data.settings.api.baseUrl || 'https://music-dl.sayqz.com')
 const client = computed(() => createTuneHubClient(baseUrl.value))
 
+// 生成封面图片URL
+function getCoverUrl(song: any) {
+  return buildApiUrl(baseUrl.value, {
+    source: (song.platform || platform.value) as string,
+    id: song.id,
+    type: 'pic',
+  })
+}
+
 async function doSearch() {
   const kw = keyword.value.trim()
   if (!kw) return
@@ -56,48 +64,7 @@ async function doSearch() {
   }
 }
 
-function playAllSearchResults() {
-  const tracks = rows.value.map(r => ({
-    id: r.id,
-    name: r.name,
-    artist: r.artist,
-    album: r.album,
-    platform: (r.platform as TuneHubPlatform) || platform.value
-  }))
-  player.playAll(tracks)
-}
 
-const columns = computed<DataTableColumns<TuneHubSearchResult>>(() => [
-  {
-    title: '歌曲',
-    key: 'name',
-    render: (row) => h('div', { style: 'font-weight:650' }, row.name),
-  },
-  { title: '歌手', key: 'artist', render: (row) => row.artist || '-' },
-  { title: '专辑', key: 'album', render: (row) => row.album || '-' },
-  { title: '平台', key: 'platform', render: (row) => (row.platform as string) || platform.value },
-  {
-    title: '操作',
-    key: 'actions',
-    render: (row) =>
-      h(
-        NButton,
-        {
-          size: 'small',
-          type: 'primary',
-          onClick: () =>
-            player.play({
-              id: row.id,
-              name: row.name,
-              artist: row.artist,
-              album: row.album,
-              platform: (row.platform as TuneHubPlatform) || platform.value,
-            }),
-        },
-        { default: () => '播放' },
-      ),
-  },
-])
 </script>
 
 <template>
@@ -152,11 +119,7 @@ const columns = computed<DataTableColumns<TuneHubSearchResult>>(() => [
               platform: (song.platform as any) || platform,
             })"
           >
-            <div class="result-play">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M8 5v14l11-7z"/>
-              </svg>
-            </div>
+            <div class="result-cover" :style="{ backgroundImage: `url(${getCoverUrl(song)})` }"></div>
             <div class="result-info">
               <div class="result-name">{{ song.name }}</div>
               <div class="result-meta">
@@ -166,6 +129,11 @@ const columns = computed<DataTableColumns<TuneHubSearchResult>>(() => [
               </div>
             </div>
             <div class="result-platform">{{ (song.platform as string) || platform }}</div>
+            <div class="result-play">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M8 5v14l11-7z"/>
+              </svg>
+            </div>
           </div>
         </div>
       </div>
@@ -233,6 +201,16 @@ const columns = computed<DataTableColumns<TuneHubSearchResult>>(() => [
 .result-card:hover .result-play {
   opacity: 1;
   transform: scale(1);
+}
+
+.result-cover {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  background-size: cover;
+  background-position: center;
+  background-color: rgba(99, 102, 241, 0.15);
+  margin-right: 12px;
 }
 
 .result-play {

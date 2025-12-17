@@ -283,6 +283,59 @@ function commitSeek(v: number) {
                 <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
               </svg>
             </NButton>
+            <!-- 查看所有播放列表 -->
+            <NButton circle size="small" @click="router.push('/library')" title="查看所有播放列表">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M18 6h-2v2h-2V6H9v2H7V6H5v12h2v-2h2v2h8v-2h2v2h2V6h-2zM7 16H5v-2h2v2zm4 0H9v-2h2v2zm4 0h-2v-2h2v2zm4 0h-2v-2h2v2z"/>
+              </svg>
+            </NButton>
+            
+            <!-- 当前播放队列 -->
+            <NPopover trigger="click" placement="top" style="padding: 0; min-width: 300px; max-width: 500px;">
+              <template #trigger>
+                <NButton circle size="small" :disabled="!player.queue || player.queue.length === 0">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"/>
+                  </svg>
+                </NButton>
+              </template>
+              <div style="padding: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; font-weight: bold; margin-bottom: 12px;">
+                  <div>当前播放队列</div>
+                  <div style="font-size: 12px; color: #666;">{{ player.queue.length }} 首歌曲</div>
+                </div>
+                <div v-if="!player.queue || player.queue.length === 0" style="text-align: center; color: #999; padding: 20px 0;">
+                  播放队列为空
+                </div>
+                <div v-else>
+                  <div style="max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;">
+                    <div
+                      v-for="(track, idx) in player.queue"
+                      :key="`${track.id}-${track.platform}-${idx}`"
+                      class="queue-item"
+                      :class="{ active: player.current && track.id === player.current.id && track.platform === player.current.platform }"
+                      @click="player.play(track)"
+                    >
+                      <div class="queue-index">{{ idx + 1 }}</div>
+                      <div class="queue-info">
+                        <div class="queue-name">{{ track.name }}</div>
+                        <div v-if="track.artist" class="queue-artist">{{ track.artist }}</div>
+                      </div>
+                      <NButton size="tiny" quaternary @click.stop="player.queue.splice(idx, 1); player.saveSettings()">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                        </svg>
+                      </NButton>
+                    </div>
+                  </div>
+                  <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                    <NButton size="small" @click="player.queue = []; player.saveSettings()">清空队列</NButton>
+                  </div>
+                </div>
+              </div>
+            </NPopover>
+            
+            <!-- 添加到歌单 -->
             <NPopover trigger="click" placement="top" style="padding: 0; min-width: 200px">
               <template #trigger>
                 <NButton circle size="small" :disabled="!player.current">
@@ -298,7 +351,7 @@ function commitSeek(v: number) {
                   <NCheckbox
                     v-for="p in player.playlists"
                     :key="p.id"
-                    :checked="player.current && p.tracks.some(t => t.id === player.current?.id && t.platform === player.current?.platform)"
+                    :checked="!!(player.current && p.tracks.some(t => t.id === player.current?.id && t.platform === player.current?.platform))"
                     @update:checked="(v) => toggleTrackInPlaylist(p.id, v)"
                   >
                     {{ p.name }}
@@ -466,6 +519,60 @@ function commitSeek(v: number) {
 .range::-webkit-slider-thumb:hover {
   transform: scale(1.2);
   box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
+}
+
+/* 当前播放队列样式 */
+.queue-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.queue-item:hover {
+  background: rgba(99, 102, 241, 0.05);
+}
+
+.queue-item.active {
+  background: rgba(99, 102, 241, 0.1);
+  border-left: 3px solid #6366f1;
+}
+
+.queue-index {
+  font-size: 13px;
+  color: #666;
+  min-width: 20px;
+  text-align: center;
+}
+
+.queue-item.active .queue-index {
+  color: #6366f1;
+  font-weight: 600;
+}
+
+.queue-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.queue-name {
+  font-weight: 500;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queue-artist {
+  font-size: 11px;
+  color: #999;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 2px;
 }
 </style>
 

@@ -17,8 +17,8 @@ import { computed, ref, watch } from 'vue'
 import { useAppStore } from '../stores/app'
 import { usePlayerStore } from '../stores/player'
 import { exportLocalData, importLocalData } from '../storage/local'
-import { resolveConflict, webdavDownload, webdavTest, webdavUpload } from '../webdav/sync'
-import { webdavTestMultiFile, webdavUploadMultiFile, webdavDownloadMultiFile, webdavDeleteOldFiles } from '../webdav/multiFileSync'
+import { resolveConflict } from '../webdav/sync'
+import { webdavTestMultiFile, webdavUploadMultiFile, webdavDownloadMultiFile } from '../webdav/multiFileSync'
 
 const dataStats = computed(() => {
   const player = usePlayerStore()
@@ -185,9 +185,9 @@ watch(
 <template>
   <NCard title="设置" size="large">
     <NSpace vertical size="large">
-      <NAlert type="info" :bordered="false">
-        现在已具备：本地数据模型（LocalStorage）、导入/导出、WebDAV 测试/上传/拉取（含冲突策略）。
-        你把“音乐 API 文档”贴出来后，我会把接口逐条落到发现/搜索/歌单/播放器等页面，并把本地收藏/历史与接口数据串起来。
+      <NAlert type="warning" :bordered="false">
+        数据通过LocalStorage存储在本地，为了避免数据丢失，建议您
+        <strong>通过webdav配置存储您自己的数据。</strong>
       </NAlert>
 
         <NCard size="small" title="音乐 API（配置）">

@@ -12,10 +12,8 @@ import type { MenuOption } from 'naive-ui'
 import { computed, h, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import PlayerBar from '../components/PlayerBar.vue'
-import { usePlayerStore } from '../stores/player'
 
 const route = useRoute()
-const player = usePlayerStore()
 const collapsed = ref(false)
 
 const themeOverrides = {

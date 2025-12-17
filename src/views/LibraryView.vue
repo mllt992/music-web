@@ -2,12 +2,27 @@
 import { NEmpty, NButton, NModal, NInput, NSpace, useMessage } from 'naive-ui'
 import { onMounted, ref, computed } from 'vue'
 import { usePlayerStore } from '../stores/player'
+import { useAppStore } from '../stores/app'
+import { buildApiUrl } from '../api/tunehub'
 
 const player = usePlayerStore()
+const app = useAppStore()
 const message = useMessage()
 const showCreatePlaylist = ref(false)
 const newPlaylistName = ref('')
 const searchQuery = ref('')
+
+// 获取API基础URL
+const baseUrl = computed(() => app.data.settings.api.baseUrl || 'https://music-dl.sayqz.com')
+
+// 生成封面图片URL
+function getCoverUrl(track: any) {
+  return buildApiUrl(baseUrl.value, {
+    source: (track.platform || 'netease') as string,
+    id: track.id,
+    type: 'pic',
+  })
+}
 
 const filteredFavorites = computed(() => {
   if (!Array.isArray(player.favorites)) return []
@@ -109,7 +124,7 @@ function deletePlaylist(id: string) {
             class="song-card"
             @click="player.play(track)"
           >
-            <div class="song-cover">
+            <div class="song-cover" :style="{ backgroundImage: `url(${getCoverUrl(track)})` }">
               <div class="song-rank">{{ idx + 1 }}</div>
               <div class="song-play-overlay">
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="white">
@@ -144,7 +159,7 @@ function deletePlaylist(id: string) {
             class="song-card"
             @click="player.play(track)"
           >
-            <div class="song-cover">
+            <div class="song-cover" :style="{ backgroundImage: `url(${getCoverUrl(track)})` }">
               <div class="song-rank">{{ idx + 1 }}</div>
               <div class="song-play-overlay">
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="white">
@@ -167,14 +182,18 @@ function deletePlaylist(id: string) {
           <div class="section-count">{{ filteredPlaylists.length }} 个歌单</div>
         </div>
         <NEmpty v-if="filteredPlaylists.length === 0" description="暂无歌单，点击右上角创建" />
-        <div v-else class="playlists-container">
+        <div v-if="player.playlists.length > 0" class="playlist-intro" style="margin-bottom: 16px; padding: 12px; background: rgba(99, 102, 241, 0.05); border-radius: 12px; font-size: 13px; color: #6366f1;">
+          💡 点击歌单名称或"查看"按钮进入歌单详情页面，管理您的歌曲
+        </div>
+        <div class="playlists-container">
           <div v-for="playlist in filteredPlaylists" :key="playlist.id" class="playlist-card">
             <div class="playlist-header">
-              <div class="playlist-info">
+              <div class="playlist-info" @click="$router.push(`/playlist/${playlist.id}`)" style="cursor: pointer;">
                 <div class="playlist-name">{{ playlist.name }}</div>
                 <div class="playlist-count">{{ playlist.tracks.length }} 首歌曲</div>
               </div>
-              <NButton size="small" type="error" @click="deletePlaylist(playlist.id)">删除</NButton>
+              <NButton size="small" type="primary" @click.stop="$router.push(`/playlist/${playlist.id}`)">查看</NButton>
+              <NButton size="small" type="error" @click.stop="deletePlaylist(playlist.id)">删除</NButton>
             </div>
             <NEmpty v-if="playlist.tracks.length === 0" description="暂无歌曲" style="padding: 20px 0;" />
             <div v-else class="songs-list">
@@ -196,8 +215,8 @@ function deletePlaylist(id: string) {
                   </svg>
                 </NButton>
               </div>
-              <div v-if="playlist.tracks.length > 10" class="show-more">
-                <div class="more-text">还有 {{ playlist.tracks.length - 10 }} 首歌曲</div>
+              <div v-if="playlist.tracks.length > 10" class="show-more" @click="$router.push(`/playlist/${playlist.id}`)" style="cursor: pointer;">
+                <div class="more-text">查看全部 {{ playlist.tracks.length }} 首歌曲</div>
               </div>
             </div>
           </div>
