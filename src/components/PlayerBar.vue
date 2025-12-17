@@ -531,23 +531,61 @@ function commitSeek(v: number) {
 .bar {
   width: 100%;
   padding: 16px 20px;
-  border: 1px solid rgba(99, 102, 241, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-top: none;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(240, 244, 255, 0.95) 100%);
-  backdrop-filter: blur(25px);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(240, 244, 255, 0.9) 100%);
+  backdrop-filter: blur(40px) saturate(1.2);
   border-radius: 0;
-  box-shadow: 0 8px 32px rgba(99, 102, 241, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.9) inset;
+  box-shadow: 
+    0 8px 32px rgba(99, 102, 241, 0.15),
+    0 0 0 1px rgba(255, 255, 255, 0.9) inset,
+    0 2px 10px rgba(0, 0, 0, 0.05);
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 20px;
   align-items: center;
-  transition: all 0.3s ease;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+/* 底部发光效果 */
+.bar::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(99, 102, 241, 0) 0%, rgba(99, 102, 241, 0.5) 50%, rgba(99, 102, 241, 0) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
 }
 
 .bar:hover {
-  box-shadow: 0 12px 40px rgba(99, 102, 241, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.95) inset;
-  border-color: rgba(99, 102, 241, 0.3);
-  transform: translateY(-1px);
+  box-shadow: 
+    0 16px 48px rgba(99, 102, 241, 0.25),
+    0 0 0 1px rgba(255, 255, 255, 0.95) inset,
+    0 4px 16px rgba(0, 0, 0, 0.1);
+  border-color: rgba(99, 102, 241, 0.4);
+  transform: translateY(-2px);
+}
+
+.bar:hover::after {
+  opacity: 1;
+}
+
+/* 激活状态下的效果 */
+.wrap.active .bar {
+  box-shadow: 
+    0 12px 40px rgba(99, 102, 241, 0.2),
+    0 0 0 1px rgba(255, 255, 255, 0.95) inset,
+    0 0 0 2px rgba(99, 102, 241, 0.2) inset;
+}
+
+/* 平滑过渡动画 */
+.wrap {
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .left {
