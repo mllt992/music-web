@@ -27,32 +27,41 @@ onMounted(() => {
     player.loadFavorites()
     player.loadPlayCounts()
 
-    // 尝试从 localStorage 恢复播放进度和总时长
-    const savedTime = localStorage.getItem('player_now')
-    const savedDuration = localStorage.getItem('player_duration')
-
-    if (savedTime) {
-      const time = parseFloat(savedTime)
-      if (!isNaN(time) && isFinite(time) && time > 0) {
-        currentTime.value = time
-      }
-    }
-
-    if (savedDuration) {
-      const savedDurationValue = parseFloat(savedDuration)
-      if (!isNaN(savedDurationValue) && isFinite(savedDurationValue) && savedDurationValue > 0) {
-        duration.value = savedDurationValue
-      }
-    }
-
-    // 如果已经有当前播放的歌曲，确保加载状态正确
+    // 如果已经有当前播放的歌曲，确保正确恢复播放状态
     const el = audioRef.value
     if (player.current && el) {
+      // 尝试从 localStorage 恢复播放进度和总时长
+      const savedTime = localStorage.getItem('player_now')
+      const savedDuration = localStorage.getItem('player_duration')
+
+      if (savedTime) {
+        const time = parseFloat(savedTime)
+        if (!isNaN(time) && isFinite(time) && time > 0) {
+          currentTime.value = time
+        }
+      }
+
+      if (savedDuration) {
+        const savedDurationValue = parseFloat(savedDuration)
+        if (!isNaN(savedDurationValue) && isFinite(savedDurationValue) && savedDurationValue > 0) {
+          duration.value = savedDurationValue
+        }
+      }
+
       // 设置正确的src，确保是字符串
       el.src = audioSrc.value || ''
-      // 如果使用的是缓存的实际URL，直接设置loading为false
-      if (player.current.realUrl) {
-        loading.value = false
+      
+      // 显式调用load()方法触发音频加载
+      el.load()
+      
+      // 根据是否有缓存的URL设置初始加载状态
+      loading.value = !player.current.realUrl
+      
+      // 如果之前是播放状态，恢复播放
+      if (player.playing) {
+        el.play().catch(() => {
+          // 播放失败时不修改player.playing状态，避免冲突
+        })
       }
     }
   })
@@ -155,6 +164,8 @@ watch(
 
       // 重点：不要设置 crossorigin，否则目标音频域没配 CORS 时会导致"无声/加载失败"
       el.src = audioSrc.value
+      // 显式调用load()方法触发音频加载，避免等待浏览器自动触发
+      el.load()
 
       // 添加事件监听器，在音频开始加载后获取实际URL
       const handleLoadStart = () => {
@@ -169,16 +180,8 @@ watch(
       // 添加音频加载事件监听，确保获取到正确的时长
       const handleLoadedData = () => {
         duration.value = el.duration || 0
-        // 加载完成，设置loading为false
-        loading.value = false
         // 再次检查实际URL
         handleLoadStart()
-        // 加载完成后，如果player.playing为true，自动开始播放
-        if (player.playing) {
-          el.play().catch(() => {
-            // 播放失败时不修改player.playing状态，避免冲突
-          })
-        }
       }
 
       // 添加音频加载错误事件监听
@@ -192,23 +195,31 @@ watch(
         }
       }
 
-      // 添加canplay事件监听，确保加载状态正确设置
+      // 添加canplay事件监听，这是最早能播放的状态，立即设置loading为false
       const handleCanPlay = () => {
         loading.value = false
         // 再次检查实际URL
         handleLoadStart()
+        // 如果player.playing为true，自动开始播放
+        if (player.playing) {
+          el.play().catch(() => {
+            // 播放失败时不修改player.playing状态，避免冲突
+          })
+        }
+      }
+
+      // 添加canplaythrough事件，确保在音频可以流畅播放时也设置loading为false
+      const handleCanPlayThrough = () => {
+        loading.value = false
       }
 
       // 添加loadstart事件监听，获取实际URL
       el.addEventListener('loadstart', handleLoadStart, { once: true })
       el.addEventListener('loadeddata', handleLoadedData, { once: true })
       el.addEventListener('error', handleError, { once: true })
+      // canplay事件优先级高于loadeddata，确保更快显示加载完成
       el.addEventListener('canplay', handleCanPlay, { once: true })
-
-      // 添加canplaythrough事件，确保在音频可以流畅播放时也设置loading为false
-      el.addEventListener('canplaythrough', () => {
-        loading.value = false
-      }, { once: true })
+      el.addEventListener('canplaythrough', handleCanPlayThrough, { once: true })
     } catch (e) {
       message.error((e as Error).message || '播放失败（可能是跨域或资源不可用）')
       player.pause()
@@ -250,6 +261,21 @@ watch(
   () => player.quality,
   () => {
     player.saveSettings()
+    // 当音频质量变化时，清除当前歌曲的realUrl缓存，强制重新获取
+    if (player.current) {
+      player.current.realUrl = undefined
+      player.current.realUrlTimestamp = undefined
+      player.saveSettings()
+      // 如果当前有正在播放的音频，强制重新加载
+      const el = audioRef.value
+      if (el && audioSrc.value) {
+        // 立即设置loading状态
+        loading.value = true
+        // 更新src并触发加载
+        el.src = audioSrc.value
+        el.load()
+      }
+    }
   },
 )
 
@@ -537,8 +563,10 @@ function commitSeek(v: number) {
       @ended="onEnded"
       @timeupdate="onTimeUpdate"
       @loadedmetadata="onLoadedMeta"
-      @play="player.playing = true"
+      @play="player.playing = true; loading = false"
+      @playing="loading = false"
       @pause="player.playing = false"
+      @error="loading = false"
     />
     </div>
   </div>

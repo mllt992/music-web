@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { NButton, NEmpty, NSpace } from 'naive-ui'
-import { computed, onMounted, ref, watch, nextTick } from 'vue'
+import { NButton, NEmpty } from 'naive-ui'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { usePlayerStore } from '../stores/player'
