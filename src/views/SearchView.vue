@@ -117,10 +117,41 @@ const columns = computed<DataTableColumns<TuneHubSearchResult>>(() => [
 
     <div class="gap" />
 
-    <NEmpty v-if="!loading && rows.length === 0" description="输入关键词开始搜索。建议用「聚合搜索」获得更全的结果。" />
-    <div v-else class="table-wrap surface-inset">
-      <NDataTable :columns="columns" :data="rows" :loading="loading" :bordered="false" />
-    </div>
+  <NEmpty v-if="!loading && rows.length === 0" description="输入关键词开始搜索。建议用「聚合搜索」获得更全的结果。" />
+      <div v-else class="results surface-inset">
+        <div class="results-header">
+          <div class="results-count">找到 {{ rows.length }} 首歌曲</div>
+        </div>
+        <div class="results-grid">
+          <div
+            v-for="song in rows"
+            :key="song.id"
+            class="result-card"
+            @click="player.play({
+              id: song.id,
+              name: song.name,
+              artist: song.artist,
+              album: song.album,
+              platform: (song.platform as any) || platform,
+            })"
+          >
+            <div class="result-play">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M8 5v14l11-7z"/>
+              </svg>
+            </div>
+            <div class="result-info">
+              <div class="result-name">{{ song.name }}</div>
+              <div class="result-meta">
+                <span v-if="song.artist">{{ song.artist }}</span>
+                <span v-if="song.artist && song.album" class="sep">·</span>
+                <span v-if="song.album">{{ song.album }}</span>
+              </div>
+            </div>
+            <div class="result-platform">{{ (song.platform as string) || platform }}</div>
+          </div>
+        </div>
+      </div>
   </div>
 </template>
 
@@ -133,7 +164,8 @@ const columns = computed<DataTableColumns<TuneHubSearchResult>>(() => [
 }
 
 .toolbar {
-  padding: 12px;
+  padding: 16px;
+  animation: fadeIn 0.3s ease;
 }
 
 .tip {
@@ -146,12 +178,119 @@ const columns = computed<DataTableColumns<TuneHubSearchResult>>(() => [
   color: var(--fg0);
 }
 
-.table-wrap {
-  overflow: hidden;
-}
-
 .gap {
   height: 12px;
+}
+
+.results {
+  padding: 20px;
+  animation: slideUp 0.4s ease;
+}
+
+.results-header {
+  margin-bottom: 16px;
+}
+
+.results-count {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.results-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.result-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.result-card:hover {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%);
+}
+
+.result-card:hover .result-play {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.result-play {
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: white;
+  flex-shrink: 0;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.result-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.result-name {
+  font-weight: 600;
+  font-size: 15px;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.result-meta {
+  font-size: 13px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sep {
+  opacity: 0.5;
+}
+
+.result-platform {
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: rgba(99, 102, 241, 0.1);
+  color: #6366f1;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style>
 

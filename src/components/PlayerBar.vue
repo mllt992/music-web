@@ -159,29 +159,33 @@ function commitSeek(v: number) {
 
 <style scoped>
 .wrap {
-  position: sticky;
-  bottom: 14px;
-  z-index: 30;
-  margin-top: 16px;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
   display: flex;
   justify-content: center;
+  padding: 0 14px 14px 14px;
+  pointer-events: none;
 }
 
 .bar {
-  width: min(1100px, calc(100vw - 28px));
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  background: var(--glass-strong);
-  backdrop-filter: var(--blur);
-  border-radius: 18px;
-  box-shadow: var(--shadow);
+  width: min(1100px, 100%);
+  padding: 14px 18px;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.92) 100%);
+  backdrop-filter: blur(20px);
+  border-radius: 20px;
+  box-shadow: 0 20px 60px rgba(99, 102, 241, 0.15), 0 0 0 1px rgba(255,255,255,0.8) inset;
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
-  transform: translateY(10px);
-  opacity: 0.92;
-  transition: transform 200ms ease, opacity 200ms ease, box-shadow 200ms ease;
+  transform: translateY(100px);
+  opacity: 0;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: auto;
 }
 
 .wrap.active .bar {
@@ -190,15 +194,21 @@ function commitSeek(v: number) {
 }
 
 .bar:hover {
-  box-shadow: 0 18px 55px rgba(15, 23, 42, 0.14);
+  box-shadow: 0 24px 70px rgba(99, 102, 241, 0.2), 0 0 0 1px rgba(255,255,255,0.9) inset;
+  border-color: rgba(99, 102, 241, 0.3);
 }
 
 .left {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
   cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.left:hover {
+  transform: translateX(2px);
 }
 
 .meta {
@@ -207,9 +217,11 @@ function commitSeek(v: number) {
 
 .t {
   font-weight: 650;
+  font-size: 15px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  margin-bottom: 2px;
 }
 
 .s {
@@ -218,33 +230,49 @@ function commitSeek(v: number) {
 }
 
 .time {
-  font-size: 12px;
-  color: rgba(15, 23, 42, 0.55);
+  font-size: 13px;
+  color: rgba(15, 23, 42, 0.6);
   font-variant-numeric: tabular-nums;
+  font-weight: 500;
 }
 
 .progress {
   grid-column: 1 / -1;
-  margin-top: 8px;
+  margin-top: 10px;
 }
 
 .range {
   width: 100%;
   appearance: none;
-  height: 4px;
+  height: 5px;
   border-radius: 999px;
-  background: rgba(15, 23, 42, 0.12);
+  background: linear-gradient(90deg, 
+    rgba(99, 102, 241, 0.25) 0%, 
+    rgba(139, 92, 246, 0.15) 100%);
   outline: none;
+  cursor: pointer;
+  transition: height 0.2s ease;
+}
+
+.range:hover {
+  height: 6px;
 }
 
 .range::-webkit-slider-thumb {
   appearance: none;
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
   border-radius: 999px;
-  background: #ffffff;
-  border: 1px solid rgba(15, 23, 42, 0.18);
-  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.14);
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  border: 2px solid white;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.range::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
 }
 </style>
 

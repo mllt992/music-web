@@ -21,10 +21,17 @@ const themeOverrides = {
     primaryColor: '#6366f1',
     primaryColorHover: '#585cf0',
     primaryColorPressed: '#4f52e8',
-    borderRadius: '14px',
+    borderRadius: '12px',
   },
   Card: {
-    borderRadius: '18px',
+    borderRadius: '16px',
+  },
+  Button: {
+    borderRadiusMedium: '10px',
+    borderRadiusSmall: '8px',
+  },
+  Input: {
+    borderRadius: '12px',
   },
 } as const
 
@@ -176,13 +183,13 @@ const selectedKey = computed(() => (route.path === '/' ? '/discover' : route.pat
 }
 
 .content {
-  padding: 14px;
+  padding: 14px 14px 90px 14px;
 }
 
 .container {
   max-width: 1100px;
   margin: 0 auto;
-  padding: 16px 16px 22px 16px;
+  padding: 16px 16px 0px 16px;
 }
 </style>
 
