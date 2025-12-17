@@ -106,6 +106,7 @@ onMounted(async () => {
       <!-- 歌词区域 -->
       <div v-else ref="lyricsContainer" class="lyrics">
         <div v-if="lrcLines.length === 0" class="no-lyric">
+          <div class="no-lyric-cover" :style="{ backgroundImage: `url(${picUrl})` }"></div>
           <NEmpty description="暂无歌词或歌词加载失败" />
         </div>
         <div v-else class="lines">
@@ -418,11 +419,40 @@ onMounted(async () => {
 
 .no-lyric {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   height: 100%;
   color: rgba(0, 0, 0, 0.5);
   font-size: 18px;
+  gap: 20px;
+}
+
+.no-lyric-cover {
+  width: 200px;
+  height: 200px;
+  background-size: cover;
+  background-position: center;
+  border-radius: 20px;
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.2),
+    0 0 0 1px rgba(255, 255, 255, 0.3) inset;
+  animation: coverPulse 3s ease-in-out infinite;
+}
+
+@keyframes coverPulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 
+      0 20px 60px rgba(0, 0, 0, 0.2),
+      0 0 0 1px rgba(255, 255, 255, 0.3) inset;
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 
+      0 25px 70px rgba(0, 0, 0, 0.25),
+      0 0 0 1px rgba(255, 255, 255, 0.3) inset;
+  }
 }
 
 /* 响应式调整 */
@@ -454,6 +484,13 @@ onMounted(async () => {
   
   .back-btn, .cover-toggle {
     size: medium;
+  }
+  
+  /* 响应式封面 */
+  .no-lyric-cover {
+    width: 150px;
+    height: 150px;
+    border-radius: 15px;
   }
 }
 

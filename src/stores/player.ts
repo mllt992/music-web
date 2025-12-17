@@ -117,11 +117,9 @@ export const usePlayerStore = defineStore('player', {
       }
 
       if (nextIdx >= 0) {
-        // 只有当切换到不同歌曲时才重置播放进度
-        if (nextIdx !== idx) {
-          localStorage.removeItem('player_now')
-          localStorage.removeItem('player_duration')
-        }
+        // 总是清除播放进度，新歌曲从0开始
+        localStorage.removeItem('player_now')
+        localStorage.removeItem('player_duration')
         this.current = this.queue[nextIdx] || null
         this.playing = true
         this.addToHistory(this.current)

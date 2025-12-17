@@ -148,8 +148,10 @@ watch(
     try {
       // 设置加载状态为true
       loading.value = true
-      // 不重置状态，保留旧时间，让onLoadedMeta处理进度恢复
+      // 重置进度相关状态
       seeking.value = false
+      currentTime.value = 0
+      duration.value = 0
 
       // 重点：不要设置 crossorigin，否则目标音频域没配 CORS 时会导致"无声/加载失败"
       el.src = audioSrc.value
@@ -171,6 +173,12 @@ watch(
         loading.value = false
         // 再次检查实际URL
         handleLoadStart()
+        // 加载完成后，如果player.playing为true，自动开始播放
+        if (player.playing) {
+          el.play().catch(() => {
+            // 播放失败时不修改player.playing状态，避免冲突
+          })
+        }
       }
 
       // 添加音频加载错误事件监听
@@ -201,20 +209,6 @@ watch(
       el.addEventListener('canplaythrough', () => {
         loading.value = false
       }, { once: true })
-
-      if (player.playing) {
-        try {
-          await el.play()
-          // 播放成功后立即设置loading为false
-          loading.value = false
-        } catch (playError) {
-          // 播放失败但音频可能已加载，仍需设置loading为false
-          loading.value = false
-          // 不显示错误信息，避免影响用户体验
-          // 浏览器自动播放策略限制，需要用户交互后才能播放
-          player.playing = false
-        }
-      }
     } catch (e) {
       message.error((e as Error).message || '播放失败（可能是跨域或资源不可用）')
       player.pause()
@@ -291,7 +285,8 @@ function onLoadedMeta() {
     duration.value = audioDuration
     localStorage.setItem('player_duration', String(audioDuration))
     
-    // 恢复之前的播放进度
+    // 检查是否有保存的播放进度，只有在新歌曲加载时才恢复
+    // 如果localStorage中没有player_now，说明是新歌曲，从0开始
     const savedTime = localStorage.getItem('player_now')
     if (savedTime) {
       const time = parseFloat(savedTime)
@@ -299,6 +294,10 @@ function onLoadedMeta() {
         el.currentTime = time
         currentTime.value = time
       }
+    } else {
+      // 新歌曲，从0开始播放
+      el.currentTime = 0
+      currentTime.value = 0
     }
   } else {
     // 如果获取不到时长，尝试等待一段时间再获取
@@ -307,7 +306,7 @@ function onLoadedMeta() {
         duration.value = el.duration
         localStorage.setItem('player_duration', String(el.duration))
         
-        // 恢复之前的播放进度
+        // 检查是否有保存的播放进度
         const savedTime = localStorage.getItem('player_now')
         if (savedTime) {
           const time = parseFloat(savedTime)
@@ -315,6 +314,10 @@ function onLoadedMeta() {
             el.currentTime = time
             currentTime.value = time
           }
+        } else {
+          // 新歌曲，从0开始播放
+          el.currentTime = 0
+          currentTime.value = 0
         }
       }
     }, 1000)
