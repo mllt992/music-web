@@ -1,17 +1,54 @@
 <script setup lang="ts">
-import { NEmpty, NTabs, NTabPane, NButton, NModal, NInput, NSpace, useMessage } from 'naive-ui'
-import { onMounted, ref } from 'vue'
+import { NEmpty, NButton, NModal, NInput, NSpace, useMessage } from 'naive-ui'
+import { onMounted, ref, computed } from 'vue'
 import { usePlayerStore } from '../stores/player'
 
 const player = usePlayerStore()
 const message = useMessage()
 const showCreatePlaylist = ref(false)
 const newPlaylistName = ref('')
+const searchQuery = ref('')
+
+const filteredFavorites = computed(() => {
+  if (!searchQuery.value) return player.favorites
+  const query = searchQuery.value.toLowerCase()
+  return player.favorites.filter(track => 
+    track.name.toLowerCase().includes(query) || 
+    (track.artist && track.artist.toLowerCase().includes(query))
+  )
+})
+
+const filteredHistory = computed(() => {
+  if (!searchQuery.value) return player.history.slice(0, 20)
+  const query = searchQuery.value.toLowerCase()
+  const filtered = player.history.filter(track => 
+    track.name.toLowerCase().includes(query) || 
+    (track.artist && track.artist.toLowerCase().includes(query))
+  )
+  return filtered.slice(0, 20)
+})
+
+const filteredPlaylists = computed(() => {
+  if (!searchQuery.value) return player.playlists
+  const query = searchQuery.value.toLowerCase()
+  return player.playlists.filter(playlist => {
+    const nameMatch = playlist.name.toLowerCase().includes(query)
+    const trackMatch = playlist.tracks.some(track => 
+      track.name.toLowerCase().includes(query) || 
+      (track.artist && track.artist.toLowerCase().includes(query))
+    )
+    return nameMatch || trackMatch
+  })
+})
 
 onMounted(() => {
-  player.loadHistory()
-  player.loadFavorites()
-  player.loadPlaylists()
+  // 首先尝试从 app store 加载数据（用于 WebDAV 同步）
+  player.loadFromAppStore()
+  // 如果 app store 中没有数据，再从 localStorage 加载
+  if (player.favorites.length === 0) player.loadFavorites()
+  if (player.history.length === 0) player.loadHistory()
+  if (player.playlists.length === 0) player.loadPlaylists()
+  player.loadPlayCounts()
 })
 
 function createPlaylist() {
@@ -38,15 +75,33 @@ function deletePlaylist(id: string) {
         <div class="section-title">音乐库</div>
         <div class="section-subtitle">收藏 · 历史 · 歌单</div>
       </div>
-      <NButton type="primary" @click="showCreatePlaylist = true">创建歌单</NButton>
+      <div class="head-right">
+        <NInput
+          v-model:value="searchQuery"
+          placeholder="搜索歌曲、艺术家或歌单..."
+          style="width: 240px; margin-right: 12px;"
+          clearable
+        >
+          <template #prefix>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+            </svg>
+          </template>
+        </NInput>
+        <NButton type="primary" @click="showCreatePlaylist = true">创建歌单</NButton>
+      </div>
     </div>
 
-    <NTabs type="segment" animated>
-      <NTabPane name="favorites" tab="收藏">
-        <NEmpty v-if="player.favorites.length === 0" description="暂无收藏的歌曲" />
+    <div class="library-sections">
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title-small">收藏</div>
+          <div class="section-count">{{ filteredFavorites.length }} 首歌曲</div>
+        </div>
+        <NEmpty v-if="filteredFavorites.length === 0" description="暂无收藏的歌曲" />
         <div v-else class="songs-grid">
           <div
-            v-for="(track, idx) in player.favorites"
+            v-for="(track, idx) in filteredFavorites"
             :key="`${track.id}-${track.platform}`"
             class="song-card"
             @click="player.play(track)"
@@ -62,6 +117,7 @@ function deletePlaylist(id: string) {
             <div class="song-details">
               <div class="song-name">{{ track.name }}</div>
               <div v-if="track.artist" class="song-artist">{{ track.artist }}</div>
+              <div class="play-count">播放 {{ player.getPlayCount(track) }} 次</div>
             </div>
             <button class="unfavorite-btn" @click.stop="player.toggleFavorite(track)">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -70,12 +126,17 @@ function deletePlaylist(id: string) {
             </button>
           </div>
         </div>
-      </NTabPane>
-      <NTabPane name="history" tab="历史">
-        <NEmpty v-if="player.history.length === 0" description="暂无播放历史" />
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title-small">历史</div>
+          <div class="section-count">{{ filteredHistory.length }} 首歌曲</div>
+        </div>
+        <NEmpty v-if="filteredHistory.length === 0" description="暂无播放历史" />
         <div v-else class="songs-grid">
           <div
-            v-for="(track, idx) in player.history"
+            v-for="(track, idx) in filteredHistory"
             :key="`${track.id}-${track.platform}-${idx}`"
             class="song-card"
             @click="player.play(track)"
@@ -91,14 +152,20 @@ function deletePlaylist(id: string) {
             <div class="song-details">
               <div class="song-name">{{ track.name }}</div>
               <div v-if="track.artist" class="song-artist">{{ track.artist }}</div>
+              <div class="play-count">播放 {{ player.getPlayCount(track) }} 次</div>
             </div>
           </div>
         </div>
-      </NTabPane>
-      <NTabPane name="playlists" tab="歌单">
-        <NEmpty v-if="player.playlists.length === 0" description="暂无歌单，点击右上角创建" />
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title-small">歌单</div>
+          <div class="section-count">{{ filteredPlaylists.length }} 个歌单</div>
+        </div>
+        <NEmpty v-if="filteredPlaylists.length === 0" description="暂无歌单，点击右上角创建" />
         <div v-else class="playlists-container">
-          <div v-for="playlist in player.playlists" :key="playlist.id" class="playlist-card">
+          <div v-for="playlist in filteredPlaylists" :key="playlist.id" class="playlist-card">
             <div class="playlist-header">
               <div class="playlist-info">
                 <div class="playlist-name">{{ playlist.name }}</div>
@@ -109,7 +176,7 @@ function deletePlaylist(id: string) {
             <NEmpty v-if="playlist.tracks.length === 0" description="暂无歌曲" style="padding: 20px 0;" />
             <div v-else class="songs-list">
               <div
-                v-for="(track, idx) in playlist.tracks"
+                v-for="(track, idx) in playlist.tracks.slice(0, 10)"
                 :key="`${track.id}-${track.platform}-${idx}`"
                 class="song-item"
                 @click="player.play(track)"
@@ -118,6 +185,7 @@ function deletePlaylist(id: string) {
                 <div class="song-info">
                   <div class="song-name">{{ track.name }}</div>
                   <div v-if="track.artist" class="song-artist">{{ track.artist }}</div>
+                  <div class="play-count-small">播放 {{ player.getPlayCount(track) }} 次</div>
                 </div>
                 <NButton size="tiny" quaternary @click.stop="player.removeTrackFromPlaylist(playlist.id, track.id, track.platform)">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
@@ -125,11 +193,14 @@ function deletePlaylist(id: string) {
                   </svg>
                 </NButton>
               </div>
+              <div v-if="playlist.tracks.length > 10" class="show-more">
+                <div class="more-text">还有 {{ playlist.tracks.length - 10 }} 首歌曲</div>
+              </div>
             </div>
           </div>
         </div>
-      </NTabPane>
-    </NTabs>
+      </div>
+    </div>
 
     <NModal v-model:show="showCreatePlaylist" preset="dialog" title="创建歌单">
       <NSpace vertical>
@@ -155,6 +226,44 @@ function deletePlaylist(id: string) {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.head-right {
+  display: flex;
+  align-items: center;
+}
+
+.library-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.section {
+  background: white;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.section-title-small {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.section-count {
+  font-size: 14px;
+  color: #6b7280;
 }
 
 .songs-grid {
@@ -244,6 +353,20 @@ function deletePlaylist(id: string) {
   white-space: nowrap;
 }
 
+.play-count {
+  font-size: 11px;
+  color: #6366f1;
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+.play-count-small {
+  font-size: 11px;
+  color: #6366f1;
+  margin-top: 2px;
+  font-weight: 500;
+}
+
 .unfavorite-btn {
   position: absolute;
   top: 8px;
@@ -275,6 +398,26 @@ function deletePlaylist(id: string) {
   to {
     opacity: 1;
   }
+}
+
+.show-more {
+  text-align: center;
+  padding: 12px;
+  margin-top: 8px;
+  border-radius: 8px;
+  background: rgba(99, 102, 241, 0.05);
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.show-more:hover {
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.more-text {
+  font-size: 13px;
+  color: #6366f1;
+  font-weight: 500;
 }
 
 .playlists-container {

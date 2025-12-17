@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { useAppStore } from './app'
 import type { TuneHubPlatform, TuneHubQuality } from '../api/tunehub'
 
 export type TrackRef = {
@@ -7,6 +8,7 @@ export type TrackRef = {
   artist?: string
   album?: string
   platform?: TuneHubPlatform | string
+  playCount?: number
 }
 
 export type Playlist = {
@@ -26,6 +28,7 @@ export const usePlayerStore = defineStore('player', {
     history: [] as TrackRef[],
     favorites: [] as TrackRef[],
     playlists: [] as Playlist[],
+    playCounts: {} as Record<string, number>,
   }),
   actions: {
     play(track: TrackRef, list?: TrackRef[]) {
@@ -37,6 +40,7 @@ export const usePlayerStore = defineStore('player', {
       }
       this.playing = true
       this.addToHistory(track)
+      this.incrementPlayCount(track)
     },
     toggleMode() {
       const modes: ('order' | 'loop' | 'shuffle')[] = ['order', 'loop', 'shuffle']
@@ -103,6 +107,7 @@ export const usePlayerStore = defineStore('player', {
     },
     saveSettings() {
       localStorage.setItem('player_mode', this.mode)
+      localStorage.setItem('music_playCounts', JSON.stringify(this.playCounts))
     },
     loadSettings() {
       const m = localStorage.getItem('player_mode')
@@ -112,6 +117,13 @@ export const usePlayerStore = defineStore('player', {
     },
     pause() {
       this.playing = false
+    },
+    syncToAppStore() {
+      const app = useAppStore()
+      app.data.favorites = this.favorites
+      app.data.history = this.history
+      app.data.playlists = this.playlists
+      app.persist()
     },
     addToHistory(track: TrackRef) {
       const exists = this.history.findIndex(t => t.id === track.id && t.platform === track.platform)
@@ -123,6 +135,7 @@ export const usePlayerStore = defineStore('player', {
         this.history = this.history.slice(0, 100)
       }
       localStorage.setItem('music_history', JSON.stringify(this.history))
+      this.syncToAppStore()
     },
     loadHistory() {
       const stored = localStorage.getItem('music_history')
@@ -142,6 +155,7 @@ export const usePlayerStore = defineStore('player', {
         this.favorites.unshift(track)
       }
       localStorage.setItem('music_favorites', JSON.stringify(this.favorites))
+      this.syncToAppStore()
     },
     isFavorite(track: TrackRef): boolean {
       return this.favorites.some(t => t.id === track.id && t.platform === track.platform)
@@ -194,6 +208,7 @@ export const usePlayerStore = defineStore('player', {
     },
     savePlaylists() {
       localStorage.setItem('music_playlists', JSON.stringify(this.playlists))
+      this.syncToAppStore()
     },
     loadPlaylists() {
       const stored = localStorage.getItem('music_playlists')
@@ -204,6 +219,32 @@ export const usePlayerStore = defineStore('player', {
           this.playlists = []
         }
       }
+    },
+    incrementPlayCount(track: TrackRef) {
+      const key = `${track.platform}-${track.id}`
+      this.playCounts[key] = (this.playCounts[key] || 0) + 1
+      localStorage.setItem('music_playCounts', JSON.stringify(this.playCounts))
+      this.syncToAppStore()
+    },
+    getPlayCount(track: TrackRef): number {
+      const key = `${track.platform}-${track.id}`
+      return this.playCounts[key] || 0
+    },
+    loadPlayCounts() {
+      const stored = localStorage.getItem('music_playCounts')
+      if (stored) {
+        try {
+          this.playCounts = JSON.parse(stored)
+        } catch {
+          this.playCounts = {}
+        }
+      }
+    },
+    loadFromAppStore() {
+      const app = useAppStore()
+      this.favorites = app.data.favorites
+      this.history = app.data.history
+      this.playlists = app.data.playlists
     },
   },
 })

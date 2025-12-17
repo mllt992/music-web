@@ -108,6 +108,23 @@ watch(
 )
 
 function onEnded() {
+  // 如果当前有歌曲，且队列为空，则重新添加到队列
+  if (player.current && player.queue.length === 0) {
+    player.queue = [player.current]
+  }
+  
+  // 循环模式下，如果只有一首歌，则重新播放同一首歌
+  if (player.mode === 'loop' && player.queue.length === 1 && player.current) {
+    // 重新播放同一首歌
+    const el = audioRef.value
+    if (el) {
+      el.currentTime = 0
+      el.play().catch(() => player.pause())
+    }
+    player.incrementPlayCount(player.current)
+    return
+  }
+  
   player.next()
 }
 
@@ -151,9 +168,21 @@ function commitSeek(v: number) {
 
         <div class="center">
           <NSpace align="center" :size="8">
-            <NButton circle size="small" :disabled="!player.current">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+            <NButton 
+              circle 
+              size="small" 
+              :disabled="!player.current"
+              @click="player.toggleMode()"
+              :title="player.mode === 'order' ? '顺序播放' : player.mode === 'loop' ? '循环播放' : '随机播放'"
+            >
+              <svg v-if="player.mode === 'order'" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/>
+              </svg>
+              <svg v-else-if="player.mode === 'loop'" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/>
+              </svg>
+              <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/>
               </svg>
             </NButton>
             <NButton circle :disabled="!player.current" @click="player.playing ? player.pause() : (player.playing = true)">

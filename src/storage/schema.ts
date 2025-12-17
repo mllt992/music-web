@@ -19,25 +19,29 @@ export type AppSettings = {
   webdav: WebDavConfig
 }
 
+export type TrackRef = {
+  id: string
+  name: string
+  artist?: string
+  album?: string
+  platform?: TuneHubPlatform | string
+  playCount?: number
+}
+
+export type Playlist = {
+  id: string
+  name: string
+  tracks: TrackRef[]
+  createdAt: number
+}
+
 export type AppDataV1 = {
   version: 1
   updatedAt: number
   settings: AppSettings
-  favorites: {
-    songs: string[]
-    playlists: string[]
-    albums: string[]
-  }
-  history: {
-    songs: Array<{ id: string; playedAt: number }>
-  }
-  playlists: Array<{
-    id: string
-    name: string
-    trackIds: string[]
-    createdAt: number
-    updatedAt: number
-  }>
+  favorites: TrackRef[]
+  history: TrackRef[]
+  playlists: Playlist[]
 }
 
 export type AppData = AppDataV1
@@ -59,8 +63,8 @@ export function createDefaultData(): AppDataV1 {
         conflictStrategy: 'server_wins',
       },
     },
-    favorites: { songs: [], playlists: [], albums: [] },
-    history: { songs: [] },
+    favorites: [],
+    history: [],
     playlists: [],
   }
 }

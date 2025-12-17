@@ -15,8 +15,20 @@ import {
 } from 'naive-ui'
 import { computed, ref, watch } from 'vue'
 import { useAppStore } from '../stores/app'
+import { usePlayerStore } from '../stores/player'
 import { exportLocalData, importLocalData } from '../storage/local'
 import { resolveConflict, webdavDownload, webdavTest, webdavUpload } from '../webdav/sync'
+import { webdavTestMultiFile, webdavUploadMultiFile, webdavDownloadMultiFile, webdavDeleteOldFiles } from '../webdav/multiFileSync'
+
+const dataStats = computed(() => {
+  const player = usePlayerStore()
+  return {
+    favorites: app.data.favorites.length,
+    history: app.data.history.length,
+    playlists: app.data.playlists.length,
+    playCounts: Object.keys(player.playCounts).length
+  }
+})
 
 const message = useMessage()
 const app = useAppStore()
@@ -97,8 +109,12 @@ const syncing = ref(false)
 async function testWebdav() {
   try {
     syncing.value = true
-    await webdavTest(app.data.settings.webdav)
-    message.success('连接成功')
+    const success = await webdavTestMultiFile(app.data.settings.webdav)
+    if (success) {
+      message.success('连接成功')
+    } else {
+      message.error('连接失败')
+    }
   } catch (e) {
     message.error((e as Error).message || '连接失败')
   } finally {
@@ -109,7 +125,8 @@ async function testWebdav() {
 async function uploadWebdav() {
   try {
     syncing.value = true
-    await webdavUpload(app.data.settings.webdav, app.data)
+    const player = usePlayerStore()
+    await webdavUploadMultiFile(app.data.settings.webdav, app.data, player.playCounts)
     message.success('已上传到 WebDAV')
   } catch (e) {
     message.error((e as Error).message || '上传失败')
@@ -121,13 +138,34 @@ async function uploadWebdav() {
 async function downloadWebdav() {
   try {
     syncing.value = true
-    const remote = await webdavDownload(app.data.settings.webdav)
-    if (!remote) {
+    const result = await webdavDownloadMultiFile(app.data.settings.webdav)
+    if (!result) {
       message.warning('远端没有可用数据（或版本不兼容）')
       return
     }
+    
+    const { data: remote, playCounts } = result
+    
+    // 根据冲突策略合并数据
     const resolved = resolveConflict(app.data, remote, app.data.settings.webdav.conflictStrategy)
+    
+    // 替换应用数据
     app.replaceData(resolved)
+    
+    // 同步播放次数数据
+    const player = usePlayerStore()
+    player.playCounts = playCounts
+    player.favorites = app.data.favorites
+    player.history = app.data.history
+    player.playlists = app.data.playlists
+    player.saveSettings()
+    
+    // 保存到 localStorage
+    localStorage.setItem('music_favorites', JSON.stringify(player.favorites))
+    localStorage.setItem('music_history', JSON.stringify(player.history))
+    localStorage.setItem('music_playlists', JSON.stringify(player.playlists))
+    localStorage.setItem('music_playCounts', JSON.stringify(player.playCounts))
+    
     message.success('已从 WebDAV 拉取并应用')
   } catch (e) {
     message.error((e as Error).message || '拉取失败')
@@ -181,6 +219,9 @@ watch(
         </NCard>
 
       <NCard size="small" title="WebDAV 同步（配置）">
+        <NAlert type="info" :bordered="false" style="margin-bottom: 16px;">
+          本地数据：收藏 {{ dataStats.favorites }} 首 | 历史 {{ dataStats.history }} 首 | 歌单 {{ dataStats.playlists }} 个 | 播放统计 {{ dataStats.playCounts }} 条
+        </NAlert>
         <NForm :model="app.data.settings.webdav" label-placement="left" label-width="110">
           <NFormItem label="WebDAV 地址">
             <NInput v-model:value="app.data.settings.webdav.url" placeholder="例如：https://dav.example.com/dav" />
@@ -195,8 +236,11 @@ watch(
               show-password-on="click"
             />
           </NFormItem>
-          <NFormItem label="远端文件路径">
-            <NInput v-model:value="app.data.settings.webdav.remotePath" placeholder="/music-app/data.json" />
+          <NFormItem label="存储路径">
+            <NInput v-model:value="app.data.settings.webdav.remotePath" placeholder="/music-app/" />
+            <template #feedback>
+              建议使用多文件存储格式，数据将分散存储在指定路径下
+            </template>
           </NFormItem>
           <NFormItem label="超时（ms）">
             <NInputNumber v-model:value="app.data.settings.webdav.timeoutMs" :min="1000" :step="1000" />
