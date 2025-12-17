@@ -19,6 +19,8 @@ export type Playlist = {
 export const usePlayerStore = defineStore('player', {
   state: () => ({
     current: null as TrackRef | null,
+    queue: [] as TrackRef[],
+    mode: 'order' as 'order' | 'loop' | 'shuffle',
     quality: '320k' as TuneHubQuality,
     playing: false,
     history: [] as TrackRef[],
@@ -26,10 +28,87 @@ export const usePlayerStore = defineStore('player', {
     playlists: [] as Playlist[],
   }),
   actions: {
-    play(track: TrackRef) {
+    play(track: TrackRef, list?: TrackRef[]) {
       this.current = track
+      if (list) {
+        this.queue = [...list]
+      } else if (this.queue.length === 0) {
+        this.queue = [track]
+      }
       this.playing = true
       this.addToHistory(track)
+    },
+    toggleMode() {
+      const modes: ('order' | 'loop' | 'shuffle')[] = ['order', 'loop', 'shuffle']
+      const idx = modes.indexOf(this.mode)
+      this.mode = modes[(idx + 1) % modes.length]
+      this.saveSettings()
+    },
+    next() {
+      if (!this.current || this.queue.length === 0) return
+
+      const idx = this.queue.findIndex(t => t.id === this.current?.id && t.platform === this.current?.platform)
+      let nextIdx = -1
+
+      if (this.mode === 'shuffle') {
+        if (this.queue.length > 1) {
+          do {
+            nextIdx = Math.floor(Math.random() * this.queue.length)
+          } while (nextIdx === idx)
+        } else {
+          nextIdx = 0
+        }
+      } else if (this.mode === 'loop') {
+        nextIdx = (idx + 1) % this.queue.length
+      } else {
+        // order
+        if (idx < this.queue.length - 1) {
+          nextIdx = idx + 1
+        } else {
+          this.playing = false
+          return
+        }
+      }
+
+      if (nextIdx >= 0) {
+        this.current = this.queue[nextIdx]
+        this.playing = true
+        this.addToHistory(this.current)
+      }
+    },
+    prev() {
+      if (!this.current || this.queue.length === 0) return
+
+      const idx = this.queue.findIndex(t => t.id === this.current?.id && t.platform === this.current?.platform)
+      let nextIdx = -1
+
+      if (this.mode === 'shuffle') {
+        // For simple shuffle prev, just go back in list wrapping around or random
+        // Ideally should be history based, but for now simple prev
+        nextIdx = (idx - 1 + this.queue.length) % this.queue.length
+      } else if (this.mode === 'loop') {
+        nextIdx = (idx - 1 + this.queue.length) % this.queue.length
+      } else {
+        // order
+        if (idx > 0) {
+          nextIdx = idx - 1
+        }
+      }
+
+      if (nextIdx >= 0) {
+        this.current = this.queue[nextIdx]
+        this.playing = true
+        this.addToHistory(this.current)
+      }
+    },
+    saveSettings() {
+      localStorage.setItem('player_mode', this.mode)
+    },
+    loadSettings() {
+      const m = localStorage.getItem('player_mode')
+      if (m && ['order', 'loop', 'shuffle'].includes(m)) {
+        this.mode = m as 'order' | 'loop' | 'shuffle'
+      }
     },
     pause() {
       this.playing = false

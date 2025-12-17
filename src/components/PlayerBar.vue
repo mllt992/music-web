@@ -19,6 +19,7 @@ const newPlaylistName = ref('')
 
 onMounted(() => {
   player.loadPlaylists()
+  player.loadSettings()
 })
 
 const qualityOptions: SelectOption[] = [
@@ -107,7 +108,7 @@ watch(
 )
 
 function onEnded() {
-  player.pause()
+  player.next()
 }
 
 function onTimeUpdate() {
