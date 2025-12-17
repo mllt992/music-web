@@ -16,6 +16,8 @@ const duration = ref(0)
 const currentTime = ref(0)
 const seeking = ref(false)
 const newPlaylistName = ref('')
+// 加载状态管理
+const loading = ref(false)
 
 onMounted(() => {
   player.loadPlaylists()
@@ -104,32 +106,43 @@ watch(
     if (!el) return
     if (!audioSrc.value) return
     try {
-      // 获取保存的播放时间
-      const savedTime = sessionStorage.getItem('player_now')
-      const timeToRestore = savedTime ? parseFloat(savedTime) : 0
-      
-      // 重置状态，但保留时间
+      // 重置状态，不保留旧时间
       duration.value = 0
+      currentTime.value = 0
       seeking.value = false
+      // 设置加载状态为true
+      loading.value = true
       
       // 重点：不要设置 crossorigin，否则目标音频域没配 CORS 时会导致"无声/加载失败"
       el.src = audioSrc.value
       
+      // 设置音频元素的当前时间为0，确保新歌曲从0开始
+      el.currentTime = 0
+      
       // 添加音频加载事件监听，确保获取到正确的时长
       el.addEventListener('loadeddata', () => {
         duration.value = el.duration || 0
-        
-        // 恢复保存的播放时间
-        if (!isNaN(timeToRestore) && isFinite(timeToRestore) && timeToRestore > 0 && timeToRestore < el.duration) {
-          el.currentTime = timeToRestore
-          currentTime.value = timeToRestore
-        }
+        // 加载完成，设置loading为false
+        loading.value = false
+      }, { once: true })
+      
+      // 添加音频加载错误事件监听
+      el.addEventListener('error', () => {
+        loading.value = false
       }, { once: true })
       
       if (player.playing) await el.play()
+      else {
+        // 如果不是播放状态，也要确保加载完成后设置loading为false
+        el.addEventListener('canplay', () => {
+          loading.value = false
+        }, { once: true })
+      }
     } catch (e) {
       message.error((e as Error).message || '播放失败（可能是跨域或资源不可用）')
       player.pause()
+      // 加载失败，设置loading为false
+      loading.value = false
     }
   },
 )
@@ -140,8 +153,15 @@ watch(
     const el = audioRef.value
     if (!el) return
     try {
-      if (v) await el.play()
-      else el.pause()
+      if (v) {
+        // 如果audio元素已经播放到末尾，重置currentTime并重新播放
+        if (el.currentTime >= el.duration && el.duration > 0) {
+          el.currentTime = 0
+        }
+        await el.play()
+      } else {
+        el.pause()
+      }
     } catch {
       player.pause()
     }
@@ -161,18 +181,7 @@ function onEnded() {
     player.queue = [player.current]
   }
   
-  // 循环模式下，如果只有一首歌，则重新播放同一首歌
-  if (player.mode === 'loop' && player.queue.length === 1 && player.current) {
-    // 重新播放同一首歌
-    const el = audioRef.value
-    if (el) {
-      el.currentTime = 0
-      el.play().catch(() => player.pause())
-    }
-    player.incrementPlayCount(player.current)
-    return
-  }
-  
+  // 直接调用player.next()，它已经处理了所有播放模式
   player.next()
 }
 
@@ -242,19 +251,27 @@ function commitSeek(v: number) {
               size="small" 
               :disabled="!player.current"
               @click="player.toggleMode()"
-              :title="player.mode === 'order' ? '顺序播放' : player.mode === 'loop' ? '循环播放' : '随机播放'"
+              :title="player.mode === 'order' ? '顺序播放' : player.mode === 'loop' ? '单曲循环' : player.mode === 'loop_list' ? '列表循环' : '随机播放'"
             >
               <svg v-if="player.mode === 'order'" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/>
               </svg>
               <svg v-else-if="player.mode === 'loop'" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M7 7h5v2H7V7zm3 10h5v2H10v-2zm-3-3h8v2H7v-2zm3-3h8v2h-8V9z"/>
+              </svg>
+              <svg v-else-if="player.mode === 'loop_list'" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/>
               </svg>
               <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/>
               </svg>
             </NButton>
-            <NButton circle :disabled="!player.current" @click="player.playing ? player.pause() : (player.playing = true)">
+            <NButton 
+              circle 
+              :disabled="!player.current || loading" 
+              :loading="loading"
+              @click="player.playing ? player.pause() : player.current && player.play(player.current)"
+            >
               <svg v-if="player.playing" width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
               </svg>
@@ -408,6 +425,8 @@ function commitSeek(v: number) {
       @ended="onEnded"
       @timeupdate="onTimeUpdate"
       @loadedmetadata="onLoadedMeta"
+      @play="player.playing = true"
+      @pause="player.playing = false"
     />
     </div>
   </div>

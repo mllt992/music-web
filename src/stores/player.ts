@@ -22,7 +22,7 @@ export const usePlayerStore = defineStore('player', {
   state: () => ({
     current: null as TrackRef | null,
     queue: [] as TrackRef[],
-    mode: 'order' as 'order' | 'loop' | 'shuffle',
+    mode: 'order' as 'order' | 'loop' | 'loop_list' | 'shuffle',
     quality: '320k' as TuneHubQuality,
     playing: false,
     history: [] as TrackRef[],
@@ -32,15 +32,30 @@ export const usePlayerStore = defineStore('player', {
   }),
   actions: {
     play(track: TrackRef, list?: TrackRef[]) {
+      // 保存当前歌曲，用于比较是否是同一首歌
+      const isSameTrack = this.current && this.current.id === track.id && this.current.platform === track.platform
+      
       this.current = track
       if (list) {
         this.queue = Array.isArray(list) ? [...list] : []
       } else if (!Array.isArray(this.queue) || this.queue.length === 0) {
         this.queue = [track]
+      } else {
+        // 检查歌曲是否已经在队列中
+        const exists = this.queue.findIndex(t => t.id === track.id && t.platform === track.platform)
+        if (exists === -1) {
+          // 将新歌曲添加到队列中，保持当前歌曲在队列中
+          this.queue.push(track)
+        }
       }
       this.playing = true
-      this.addToHistory(track)
-      this.incrementPlayCount(track)
+      
+      // 只有当播放新歌曲时才更新历史记录和播放计数
+      if (!isSameTrack) {
+        this.addToHistory(track)
+        this.incrementPlayCount(track)
+      }
+      
       this.saveSettings()
     },
     playAll(tracks: TrackRef[], startIndex: number = 0) {
@@ -55,10 +70,12 @@ export const usePlayerStore = defineStore('player', {
       }
     },
     toggleMode() {
-      const modes: ('order' | 'loop' | 'shuffle')[] = ['order', 'loop', 'shuffle']
-      const currentMode = this.mode as 'order' | 'loop' | 'shuffle'
+      // 扩展播放模式，添加单曲循环模式
+      const modes: ('order' | 'loop' | 'loop_list' | 'shuffle')[] = ['order', 'loop', 'loop_list', 'shuffle']
+      // 兼容旧数据，如果是旧的loop模式，转换为新的loop_list模式
+      const currentMode = this.mode === 'loop' ? 'loop_list' : this.mode as 'order' | 'loop' | 'loop_list' | 'shuffle'
       const idx = modes.indexOf(currentMode)
-      this.mode = modes[(idx + 1) % modes.length] as 'order' | 'loop' | 'shuffle'
+      this.mode = modes[(idx + 1) % modes.length] as 'order' | 'loop' | 'loop_list' | 'shuffle'
       this.saveSettings()
     },
     next() {
@@ -76,6 +93,10 @@ export const usePlayerStore = defineStore('player', {
           nextIdx = 0
         }
       } else if (this.mode === 'loop') {
+        // 单曲循环：保持当前歌曲不变
+        nextIdx = idx
+      } else if (this.mode === 'loop_list') {
+        // 列表循环：播放完最后一首后回到第一首
         nextIdx = (idx + 1) % this.queue.length
       } else {
         // order
@@ -139,8 +160,9 @@ export const usePlayerStore = defineStore('player', {
     },
     loadSettings() {
       const m = localStorage.getItem('player_mode')
-      if (m && ['order', 'loop', 'shuffle'].includes(m)) {
-        this.mode = m as 'order' | 'loop' | 'shuffle'
+      // 兼容旧数据，添加loop_list模式
+      if (m && ['order', 'loop', 'shuffle', 'loop_list'].includes(m)) {
+        this.mode = m as 'order' | 'loop' | 'loop_list' | 'shuffle'
       }
       
       // 加载当前播放状态
