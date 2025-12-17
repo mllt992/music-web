@@ -47,8 +47,8 @@ onMounted(() => {
   // 如果已经有当前播放的歌曲，确保加载状态正确
   const el = audioRef.value
   if (player.current && el) {
-    // 设置正确的src
-    el.src = audioSrc.value
+    // 设置正确的src，确保是字符串
+    el.src = audioSrc.value || ''
     // 如果使用的是缓存的实际URL，直接设置loading为false
     if (player.current.realUrl) {
       loading.value = false
@@ -214,7 +214,9 @@ watch(
         } catch (playError) {
           // 播放失败但音频可能已加载，仍需设置loading为false
           loading.value = false
-          message.error((playError as Error).message || '播放失败（可能是浏览器策略限制）')
+          // 不显示错误信息，避免影响用户体验
+          // 浏览器自动播放策略限制，需要用户交互后才能播放
+          player.playing = false
         }
       }
     } catch (e) {
@@ -248,7 +250,8 @@ watch(
         el.pause()
       }
     } catch {
-      player.pause()
+      // 播放失败，将playing设置为false
+      player.playing = false
     }
   },
 )
@@ -330,7 +333,7 @@ function commitSeek(v: number) {
     </div>
 
         <div class="center">
-          <NSpace align="center" :size="8">
+          <NSpace align="center" :size="16">
             <NButton
               circle
               size="small"
@@ -519,71 +522,100 @@ function commitSeek(v: number) {
 
 <style scoped>
 .wrap {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 50;
   display: flex;
   justify-content: center;
-  padding: 0 14px 14px 14px;
+  margin: 0;
+  padding: 0;
 }
 
 .bar {
-  width: min(1100px, 100%);
-  padding: 14px 18px;
+  width: 100%;
+  padding: 16px 20px;
   border: 1px solid rgba(99, 102, 241, 0.2);
-  background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.92) 100%);
-  backdrop-filter: blur(20px);
-  border-radius: 20px;
-  box-shadow: 0 20px 60px rgba(99, 102, 241, 0.15), 0 0 0 1px rgba(255,255,255,0.8) inset;
+  border-top: none;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(240, 244, 255, 0.95) 100%);
+  backdrop-filter: blur(25px);
+  border-radius: 0;
+  box-shadow: 0 8px 32px rgba(99, 102, 241, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.9) inset;
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 12px;
+  gap: 20px;
   align-items: center;
+  transition: all 0.3s ease;
 }
 
 .bar:hover {
-  box-shadow: 0 24px 70px rgba(99, 102, 241, 0.2), 0 0 0 1px rgba(255,255,255,0.9) inset;
+  box-shadow: 0 12px 40px rgba(99, 102, 241, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.95) inset;
   border-color: rgba(99, 102, 241, 0.3);
+  transform: translateY(-1px);
 }
 
 .left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   min-width: 0;
   cursor: pointer;
-  transition: transform 0.2s ease;
+  transition: all 0.3s ease;
+  padding: 4px 0;
+  border-radius: 12px;
+  padding-right: 12px;
 }
 
 .left:hover {
   transform: translateX(2px);
+  background: rgba(99, 102, 241, 0.08);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.1);
 }
 
 .meta {
   min-width: 0;
+  flex: 1;
 }
 
 .t {
-  font-weight: 650;
-  font-size: 15px;
+  font-weight: 700;
+  font-size: 16px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   margin-bottom: 2px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: 0.3px;
+  transition: all 0.3s ease;
+}
+
+.left:hover .t {
+  transform: translateX(2px);
 }
 
 .s {
   font-size: 12px;
-  color: rgba(15, 23, 42, 0.55);
+  color: rgba(99, 102, 241, 0.6);
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  transition: all 0.3s ease;
+}
+
+.left:hover .s {
+  color: rgba(139, 92, 246, 0.8);
+  transform: translateX(2px);
 }
 
 .time {
   font-size: 13px;
-  color: rgba(15, 23, 42, 0.6);
+  color: rgba(99, 102, 241, 0.7);
   font-variant-numeric: tabular-nums;
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  transition: all 0.3s ease;
+}
+
+.time:hover {
+  color: rgba(99, 102, 241, 0.9);
 }
 
 .progress {
@@ -594,35 +626,62 @@ function commitSeek(v: number) {
 .range {
   width: 100%;
   appearance: none;
-  height: 5px;
+  height: 6px;
   border-radius: 999px;
   background: linear-gradient(90deg,
     rgba(99, 102, 241, 0.25) 0%,
     rgba(139, 92, 246, 0.15) 100%);
   outline: none;
   cursor: pointer;
-  transition: height 0.2s ease;
+  transition: all 0.3s ease;
+  box-shadow: inset 0 1px 3px rgba(99, 102, 241, 0.15);
 }
 
 .range:hover {
-  height: 6px;
+  height: 8px;
+  background: linear-gradient(90deg,
+    rgba(99, 102, 241, 0.3) 0%,
+    rgba(139, 92, 246, 0.2) 100%);
 }
 
 .range::-webkit-slider-thumb {
   appearance: none;
-  width: 14px;
-  height: 14px;
-  border-radius: 999px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
   background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  border: 2px solid white;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+  border: 3px solid white;
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4), 0 0 0 1px rgba(99, 102, 241, 0.2);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
+  transform: scale(0.9);
 }
 
 .range::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 8px 28px rgba(99, 102, 241, 0.5), 0 0 0 1px rgba(99, 102, 241, 0.3);
+}
+
+.range::-webkit-slider-thumb:active {
   transform: scale(1.2);
-  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
+  box-shadow: 0 10px 32px rgba(99, 102, 241, 0.6), 0 0 0 1px rgba(99, 102, 241, 0.4);
+}
+
+/* Firefox support */
+.range::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  border: 3px solid white;
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4), 0 0 0 1px rgba(99, 102, 241, 0.2);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.range::-moz-range-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 8px 28px rgba(99, 102, 241, 0.5), 0 0 0 1px rgba(99, 102, 241, 0.3);
 }
 
 /* 当前播放队列样式 */
