@@ -286,7 +286,8 @@ const selectedKey = computed(() => (route.path === '/' ? '/discover' : route.pat
   height: 64px;
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  gap: 12px;
   padding: 0 14px;
   cursor: pointer;
   user-select: none;
@@ -479,6 +480,7 @@ const selectedKey = computed(() => (route.path === '/' ? '/discover' : route.pat
   backdrop-filter: none;
   box-shadow: none;
   height: 100%;
+  flex: 1;
 }
 
 .container {
