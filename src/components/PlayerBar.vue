@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { NAvatar, NButton, NSelect, NSpace, useMessage } from 'naive-ui'
+import { NAvatar, NButton, NSelect, NSpace, useMessage, NPopover, NCheckbox, NInput } from 'naive-ui'
 import type { SelectOption } from 'naive-ui'
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, onMounted } from 'vue'
 import { usePlayerStore } from '../stores/player'
 import { useAppStore } from '../stores/app'
 import { buildApiUrl } from '../api/tunehub'
@@ -15,6 +15,11 @@ const audioRef = ref<HTMLAudioElement | null>(null)
 const duration = ref(0)
 const currentTime = ref(0)
 const seeking = ref(false)
+const newPlaylistName = ref('')
+
+onMounted(() => {
+  player.loadPlaylists()
+})
 
 const qualityOptions: SelectOption[] = [
   { label: '标准 128k', value: '128k' },
@@ -22,6 +27,27 @@ const qualityOptions: SelectOption[] = [
   { label: '无损 FLAC', value: 'flac' },
   { label: 'Hi-Res 24bit', value: 'flac24bit' },
 ]
+
+function toggleTrackInPlaylist(playlistId: string, checked: boolean) {
+  if (!player.current) return
+  if (checked) {
+    player.addTrackToPlaylist(playlistId, player.current)
+    message.success('已添加到歌单')
+  } else {
+    player.removeTrackFromPlaylist(playlistId, player.current.id, player.current.platform)
+    message.success('已从歌单移除')
+  }
+}
+
+function createPlaylistInPopover() {
+  if (!newPlaylistName.value.trim()) return
+  const p = player.createPlaylist(newPlaylistName.value.trim())
+  if (player.current) {
+    player.addTrackToPlaylist(p.id, player.current)
+    message.success('已创建歌单并添加歌曲')
+  }
+  newPlaylistName.value = ''
+}
 
 const title = computed(() => {
   if (!player.current) return '未播放'
@@ -139,7 +165,7 @@ function commitSeek(v: number) {
             </NButton>
             <NButton circle size="small" :disabled="!player.current">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M16 18l-8.5-6L16 6v12zm-2-12v12h2V6h-2z"/>
+                <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
               </svg>
             </NButton>
             <NButton 
@@ -153,6 +179,38 @@ function commitSeek(v: number) {
                 <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
               </svg>
             </NButton>
+            <NPopover trigger="click" placement="top" style="padding: 0; min-width: 200px">
+              <template #trigger>
+                <NButton circle size="small" :disabled="!player.current">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M14 10H2v2h12v-2zm0-4H2v2h12V6zm4 8v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zM2 16h8v-2H2v2z"/>
+                  </svg>
+                </NButton>
+              </template>
+              <div style="padding: 12px;">
+                <div style="font-weight: bold; margin-bottom: 8px;">添加到歌单</div>
+                <div v-if="player.playlists.length === 0" style="color: #999; font-size: 12px; margin-bottom: 8px;">暂无歌单</div>
+                <div style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
+                  <NCheckbox
+                    v-for="p in player.playlists"
+                    :key="p.id"
+                    :checked="player.current && p.tracks.some(t => t.id === player.current?.id && t.platform === player.current?.platform)"
+                    @update:checked="(v) => toggleTrackInPlaylist(p.id, v)"
+                  >
+                    {{ p.name }}
+                  </NCheckbox>
+                </div>
+                <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #eee;">
+                   <NInput size="small" v-model:value="newPlaylistName" placeholder="新建歌单" @keyup.enter="createPlaylistInPopover">
+                      <template #suffix>
+                        <NButton size="tiny" text @click="createPlaylistInPopover">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                        </NButton>
+                      </template>
+                   </NInput>
+                </div>
+              </div>
+            </NPopover>
             <NButton 
               circle
               size="small" 
