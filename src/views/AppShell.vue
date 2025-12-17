@@ -183,11 +183,12 @@ const selectedKey = computed(() => (route.path === '/' ? '/discover' : route.pat
 }
 
 .content {
-  padding: 14px 14px 90px 14px;
+  padding: 14px 14px 110px 14px;
+  overflow-y: auto;
 }
 
 .container {
-  max-width: 1100px;
+  max-width: 1280px;
   margin: 0 auto;
   padding: 16px 16px 0px 16px;
 }
