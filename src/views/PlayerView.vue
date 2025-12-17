@@ -33,6 +33,7 @@ const lrcUrl = computed(() => {
 const lrcText = ref('')
 const lrcLines = ref<LrcLine[]>([])
 const now = ref(0)
+const lyricsContainer = ref<HTMLElement | null>(null)
 
 function setNowFromStorage() {
   const raw = sessionStorage.getItem('player_now')
@@ -54,6 +55,15 @@ async function loadLyrics() {
 
 const activeIdx = computed(() => findActiveLineIndex(lrcLines.value, now.value))
 
+watch(activeIdx, (newIdx) => {
+  if (newIdx >= 0 && lyricsContainer.value) {
+    const activeEl = lyricsContainer.value.querySelector('.line.active')
+    if (activeEl) {
+      activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }
+})
+
 watch(
   () => player.current?.id,
   async () => {
@@ -65,6 +75,8 @@ onMounted(async () => {
   setNowFromStorage()
   await loadLyrics()
   window.addEventListener('storage', setNowFromStorage)
+  const interval = setInterval(setNowFromStorage, 100)
+  return () => clearInterval(interval)
 })
 </script>
 
@@ -94,21 +106,21 @@ onMounted(async () => {
         <div class="cover" :style="{ backgroundImage: picUrl ? `url(${picUrl})` : '' }" />
       </div>
 
-      <div class="lyric surface-inset">
-        <div v-if="lrcLines.length === 0" class="no-lyric">
-          <NEmpty description="暂无歌词或歌词加载失败" />
-        </div>
-        <div v-else class="lines">
-          <div
-            v-for="(line, idx) in lrcLines"
-            :key="idx"
-            class="line"
-            :class="{ active: idx === activeIdx }"
-          >
-            {{ line.text || '…' }}
+        <div class="lyric surface-inset">
+          <div v-if="lrcLines.length === 0" class="no-lyric">
+            <NEmpty description="暂无歌词或歌词加载失败" />
+          </div>
+          <div v-else ref="lyricsContainer" class="lines">
+            <div
+              v-for="(line, idx) in lrcLines"
+              :key="idx"
+              class="line"
+              :class="{ active: idx === activeIdx }"
+            >
+              {{ line.text || '…' }}
+            </div>
           </div>
         </div>
-      </div>
     </div>
   </div>
 </template>
@@ -171,22 +183,26 @@ onMounted(async () => {
 .lines {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 16px;
   line-height: 1.8;
   max-height: 560px;
   overflow: auto;
-  padding-right: 6px;
+  padding: 20px 16px;
+  scroll-behavior: smooth;
 }
 
 .line {
-  color: rgba(15, 23, 42, 0.6);
-  transition: color 160ms ease, transform 160ms ease;
+  color: rgba(15, 23, 42, 0.45);
+  transition: all 0.3s ease;
+  font-size: 15px;
+  text-align: center;
 }
 
 .line.active {
-  color: rgba(15, 23, 42, 0.98);
+  color: #6366f1;
   font-weight: 650;
-  transform: translateX(2px);
+  font-size: 18px;
+  transform: scale(1.05);
 }
 </style>
 
