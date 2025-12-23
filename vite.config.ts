@@ -11,8 +11,8 @@ export default defineConfig({
         target: 'http://localhost:5173', // 占位符，实际目标会动态设置
         changeOrigin: true,
         secure: false,
-        configure: (proxy, options) => {
-          proxy.on('proxyReq', (proxyReq, req, res) => {
+        configure: (proxy, _options) => {
+          proxy.on('proxyReq', (proxyReq, req, _res, proxyOptions) => {
             try {
               // 从路径中提取目标主机和路径
               const match = req.url?.match(/^\/webdav-proxy\/([^\/]+)(.*)/)
@@ -27,8 +27,8 @@ export default defineConfig({
                 // 动态更新代理目标
                 const protocol = req.headers['x-forwarded-proto'] || 'https'
                 const target = `${protocol}://${hostname}`
-                if (proxy.options.target !== target) {
-                  proxy.options.target = target
+                if (proxyOptions && proxyOptions.target !== target) {
+                  proxyOptions.target = target
                 }
               }
             } catch (e) {
