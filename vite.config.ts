@@ -14,18 +14,16 @@ export default defineConfig({
         configure: (proxy, _options) => {
           proxy.on('proxyReq', (proxyReq, req, _res, proxyOptions) => {
             try {
-              // 从路径中提取目标主机和路径
-              const match = req.url?.match(/^\/webdav-proxy\/([^\/]+)(.*)/)
+              // 从路径中提取协议、主机和路径
+              const match = req.url?.match(/^\\/webdav-proxy\\/(https?)\\/([^\\/]+)(\\/.+)?/i)
               if (match) {
-                const hostname = match[1]
-                const path = match[2] || '/'
+                const protocol = match[1].toLowerCase()
+                const hostname = decodeURIComponent(match[2])
+                const path = match[3] || '/'
                 
-                // 设置正确的目标主机和路径
                 proxyReq.setHeader('host', hostname)
                 proxyReq.path = path
                 
-                // 动态更新代理目标
-                const protocol = req.headers['x-forwarded-proto'] || 'https'
                 const target = `${protocol}://${hostname}`
                 if (proxyOptions && proxyOptions.target !== target) {
                   proxyOptions.target = target

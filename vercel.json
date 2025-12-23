@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/webdav-proxy/(.*)",
+      "destination": "/api/webdav-proxy/$1"
+    }
+  ]
+}

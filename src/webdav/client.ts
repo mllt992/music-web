@@ -2,23 +2,21 @@ import { createClient, type WebDAVClient } from 'webdav'
 import type { WebDavConfig } from '../storage/schema'
 
 export function createWebDavClient(cfg: WebDavConfig): WebDAVClient {
-  // 开发环境使用代理避免CORS问题
-  const isDev = import.meta.env.DEV
   let url = cfg.url
-  
-  // 在开发环境中，使用代理服务器
-  if (isDev && url.startsWith('http')) {
+
+  // 浏览器环境统一通过代理路径访问，避免跨域限制
+  if (url.startsWith('http')) {
     try {
       const urlObj = new URL(url)
-      // 使用更简单的代理路径格式
-      const proxyPath = `/webdav-proxy/${urlObj.hostname}${urlObj.pathname}`
-      url = proxyPath
+      const protocol = urlObj.protocol.replace(':', '')
+      const encodedHost = encodeURIComponent(urlObj.host)
+      const pathname = urlObj.pathname || '/'
+      url = `/webdav-proxy/${protocol}/${encodedHost}${pathname}`
     } catch (e) {
-      // URL解析失败，使用原始URL
       console.warn('WebDAV URL解析失败:', e)
     }
   }
-  
+
   return createClient(url, {
     username: cfg.username,
     password: cfg.password,
@@ -26,5 +24,4 @@ export function createWebDavClient(cfg: WebDavConfig): WebDAVClient {
     maxContentLength: Infinity,
   })
 }
-
 
